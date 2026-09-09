@@ -1,4 +1,4 @@
-#include "keystore_ui_backend.h"
+#include "evm_keystore_ui_backend.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -31,12 +31,12 @@ QString params(const QJsonObject &o)
 
 } // namespace
 
-void KeystoreUiBackend::say(const QString &line)
+void EvmKeystoreUiBackend::say(const QString &line)
 {
     setLastError(lastError().isEmpty() ? line : lastError() + QLatin1Char('\n') + line);
 }
 
-bool KeystoreUiBackend::ok(const QString &reply, const QString &context)
+bool EvmKeystoreUiBackend::ok(const QString &reply, const QString &context)
 {
     const QJsonObject o = parseObject(reply);
     if (o.value(QStringLiteral("ok")).toBool())
@@ -53,19 +53,19 @@ bool KeystoreUiBackend::ok(const QString &reply, const QString &context)
     return false;
 }
 
-bool KeystoreUiBackend::read(const QString &key, const QString &reply, const QString &context)
+bool EvmKeystoreUiBackend::read(const QString &key, const QString &reply, const QString &context)
 {
     const bool good = ok(reply, context);
     m_reads[key] = good;
     return good;
 }
 
-void KeystoreUiBackend::publishReads()
+void EvmKeystoreUiBackend::publishReads()
 {
     setReadsJson(QString::fromUtf8(QJsonDocument(m_reads).toJson(QJsonDocument::Compact)));
 }
 
-void KeystoreUiBackend::onContextReady()
+void EvmKeystoreUiBackend::onContextReady()
 {
     // The account list changes under us when this UI is not the only thing running.
     modules().keystore_module.onAccounts_changed([this](int) {
@@ -74,7 +74,7 @@ void KeystoreUiBackend::onContextReady()
     refresh();
 }
 
-void KeystoreUiBackend::loadIdentity()
+void EvmKeystoreUiBackend::loadIdentity()
 {
     const QString reply = modules().keystore_module.caller_identity();
     const QJsonObject o = parseObject(reply);
@@ -83,8 +83,8 @@ void KeystoreUiBackend::loadIdentity()
     // Say plainly whether we hold the role, instead of letting every mutation fail
     // mysteriously one screen later.
     const QString me = o.value(QStringLiteral("identity")).toString();
-    const QString custodian = o.value(QStringLiteral("custodian")).toString();
-    setIsCustodian(!me.isEmpty() && me == custodian);
+    const QJsonArray custodians = o.value(QStringLiteral("custodians")).toArray();
+    setIsCustodian(!me.isEmpty() && custodians.contains(QJsonValue(me)));
 
     // An unreadable keystore.json empties both roles rather than reverting to the defaults.
     // Say why, or "not the custodian" reads as a deployment mistake instead of a torn file.
@@ -93,7 +93,7 @@ void KeystoreUiBackend::loadIdentity()
         say(cfg);
 }
 
-void KeystoreUiBackend::loadAccounts()
+void EvmKeystoreUiBackend::loadAccounts()
 {
     // A refused read clears what it feeds, like the wallet reads below. The listing can now
     // fail — an unreadable keystore directory refuses instead of answering "no accounts" —
@@ -111,7 +111,7 @@ void KeystoreUiBackend::loadAccounts()
     publishReads();
 }
 
-void KeystoreUiBackend::loadGroups()
+void EvmKeystoreUiBackend::loadGroups()
 {
     // A refused read clears what it feeds. Leaving the previous answer on screen would say
     // "no wallets" or "these wallets" with the same confidence the keystore just withdrew.
@@ -148,7 +148,7 @@ void KeystoreUiBackend::loadGroups()
     publishReads();
 }
 
-void KeystoreUiBackend::refresh()
+void EvmKeystoreUiBackend::refresh()
 {
     setBusy(true);
     setLastError(QString());
@@ -160,7 +160,7 @@ void KeystoreUiBackend::refresh()
     setBusy(false);
 }
 
-QString KeystoreUiBackend::generateMnemonic(int words)
+QString EvmKeystoreUiBackend::generateMnemonic(int words)
 {
     setLastError(QString());
     const QString reply = modules().keystore_module.create_mnemonic(words);
@@ -169,9 +169,9 @@ QString KeystoreUiBackend::generateMnemonic(int words)
     return parseObject(reply).value(QStringLiteral("phrase")).toString();
 }
 
-bool KeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
-                                       QString accountPassword, QString groupPassword,
-                                       bool derivable, QString groupLabel)
+bool EvmKeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
+                                          QString accountPassword, QString groupPassword,
+                                          bool derivable, QString groupLabel)
 {
     setLastError(QString());
     QJsonObject p;
@@ -192,7 +192,7 @@ bool KeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
     return good;
 }
 
-bool KeystoreUiBackend::importPrivateKey(QString privHex, QString accountPassword)
+bool EvmKeystoreUiBackend::importPrivateKey(QString privHex, QString accountPassword)
 {
     setLastError(QString());
     const bool good =
@@ -202,7 +202,7 @@ bool KeystoreUiBackend::importPrivateKey(QString privHex, QString accountPasswor
     return good;
 }
 
-bool KeystoreUiBackend::importVaultJson(QString vaultJson, QString oldPassword, QString newPassword)
+bool EvmKeystoreUiBackend::importVaultJson(QString vaultJson, QString oldPassword, QString newPassword)
 {
     setLastError(QString());
     const bool good = ok(
@@ -213,8 +213,8 @@ bool KeystoreUiBackend::importVaultJson(QString vaultJson, QString oldPassword, 
     return good;
 }
 
-bool KeystoreUiBackend::deriveNextAccount(QString group, QString groupPassword,
-                                          QString accountPassword)
+bool EvmKeystoreUiBackend::deriveNextAccount(QString group, QString groupPassword,
+                                             QString accountPassword)
 {
     setLastError(QString());
     QJsonObject p;
@@ -230,9 +230,9 @@ bool KeystoreUiBackend::deriveNextAccount(QString group, QString groupPassword,
     return good;
 }
 
-bool KeystoreUiBackend::deriveAccountAt(QString group, QString groupPassword,
-                                        QString accountPassword, int bip44Account, int change,
-                                        int index)
+bool EvmKeystoreUiBackend::deriveAccountAt(QString group, QString groupPassword,
+                                           QString accountPassword, int bip44Account, int change,
+                                           int index)
 {
     setLastError(QString());
     // The keystore's path levels are unsigned; a negative would come back as an opaque
@@ -254,8 +254,8 @@ bool KeystoreUiBackend::deriveAccountAt(QString group, QString groupPassword,
     return good;
 }
 
-QString KeystoreUiBackend::previewAddresses(QString group, QString groupPassword, int change,
-                                            int from, int count)
+QString EvmKeystoreUiBackend::previewAddresses(QString group, QString groupPassword, int change,
+                                               int from, int count)
 {
     setLastError(QString());
     if (change < 0 || from < 0 || count < 0) {
@@ -274,7 +274,7 @@ QString KeystoreUiBackend::previewAddresses(QString group, QString groupPassword
     return compact(parseObject(reply).value(QStringLiteral("addresses")));
 }
 
-bool KeystoreUiBackend::forgetDerivation(QString group)
+bool EvmKeystoreUiBackend::forgetDerivation(QString group)
 {
     setLastError(QString());
     QJsonObject p;
@@ -294,7 +294,7 @@ bool KeystoreUiBackend::forgetDerivation(QString group)
     return good;
 }
 
-bool KeystoreUiBackend::removeWallet(QString group)
+bool EvmKeystoreUiBackend::removeWallet(QString group)
 {
     setLastError(QString());
     QJsonObject p;
@@ -314,7 +314,7 @@ bool KeystoreUiBackend::removeWallet(QString group)
     return good;
 }
 
-QString KeystoreUiBackend::exportVaultJson(QString address, QString password)
+QString EvmKeystoreUiBackend::exportVaultJson(QString address, QString password)
 {
     setLastError(QString());
     const QString reply = modules().keystore_module.export_keystore_json(address, password);
@@ -323,7 +323,7 @@ QString KeystoreUiBackend::exportVaultJson(QString address, QString password)
     return parseObject(reply).value(QStringLiteral("keystore")).toString();
 }
 
-bool KeystoreUiBackend::setLabel(QString address, QString label, QString password)
+bool EvmKeystoreUiBackend::setLabel(QString address, QString label, QString password)
 {
     setLastError(QString());
     // The keystore decides which of the two this is; it ignores the password when the label
@@ -335,8 +335,8 @@ bool KeystoreUiBackend::setLabel(QString address, QString label, QString passwor
     return good;
 }
 
-bool KeystoreUiBackend::setWalletName(QString group, QString name, QString address,
-                                      QString password)
+bool EvmKeystoreUiBackend::setWalletName(QString group, QString name, QString address,
+                                         QString password)
 {
     setLastError(QString());
     QJsonObject p;
@@ -357,14 +357,14 @@ bool KeystoreUiBackend::setWalletName(QString group, QString name, QString addre
     return good;
 }
 
-bool KeystoreUiBackend::changePassword(QString address, QString oldPassword, QString newPassword)
+bool EvmKeystoreUiBackend::changePassword(QString address, QString oldPassword, QString newPassword)
 {
     setLastError(QString());
     return ok(modules().keystore_module.change_password(address, oldPassword, newPassword),
               QStringLiteral("change password"));
 }
 
-bool KeystoreUiBackend::deleteAccount(QString address, QString password)
+bool EvmKeystoreUiBackend::deleteAccount(QString address, QString password)
 {
     setLastError(QString());
     // delete_account answers a bare bool: a refusal and a wrong password are indistinguishable

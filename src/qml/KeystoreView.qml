@@ -21,7 +21,7 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.palette.background }
 
-    readonly property var backend: logos.module("keystore_ui")
+    readonly property var backend: logos.module("evm_keystore_ui")
 
     // Writable, fed by the signal — a binding containing a function call evaluates once at
     // creation, before ui-host has handed over, and latches false forever.
@@ -29,7 +29,7 @@ Item {
     Connections {
         target: logos
         function onViewModuleReadyChanged(moduleName, isReady) {
-            if (moduleName === "keystore_ui") root.ready = isReady && root.backend !== null
+            if (moduleName === "evm_keystore_ui") root.ready = isReady && root.backend !== null
         }
 
         // Somebody wants accounts managed, and the shell has already brought us forward —

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(KeystoreUiPlugin LANGUAGES CXX)
+project(EvmKeystoreUiPlugin LANGUAGES CXX)
 
 if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
     include($ENV{LOGOS_MODULE_BUILDER_ROOT}/cmake/LogosModule.cmake)
@@ -9,11 +9,11 @@ endif()
 
 # SOURCES must be listed explicitly — the macro does not glob.
 logos_module(
-    NAME keystore_ui
-    REP_FILE src/keystore_ui.rep
+    NAME evm_keystore_ui
+    REP_FILE src/evm_keystore_ui.rep
     SOURCES
-        src/keystore_ui_backend.h
-        src/keystore_ui_backend.cpp
+        src/evm_keystore_ui_backend.h
+        src/evm_keystore_ui_backend.cpp
     INCLUDE_DIRS
         src
 )
