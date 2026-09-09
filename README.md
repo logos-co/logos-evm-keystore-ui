@@ -1,9 +1,9 @@
-# keystore_ui
+# evm_keystore_ui
 
 The one place accounts are created, imported, exported and deleted.
 
 Every other surface only reads which accounts exist. Wallets request signatures and render an
-account picker; `signer_ui` shows what is being signed and takes the password to authorise it.
+account picker; `evm_signer_ui` shows what is being signed and takes the password to authorise it.
 Neither can change the keystore, and that is enforced by the keystore itself — this module is
 its configured **custodian**, and Tier D admits nobody else.
 

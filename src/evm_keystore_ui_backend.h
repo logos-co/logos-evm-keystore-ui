@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QString>
 
-#include "rep_keystore_ui_source.h"
+#include "rep_evm_keystore_ui_source.h"
 #include "logos_ui_plugin_context.h"
 
 // The keystore UI backend.
@@ -15,8 +15,8 @@
 //
 // Secrets are returned from methods, never published as properties: a property is cached in
 // the shell process and broadcast to every connected replica.
-class KeystoreUiBackend : public KeystoreUiSimpleSource,
-                          public LogosUiPluginContext
+class EvmKeystoreUiBackend : public EvmKeystoreUiSimpleSource,
+                             public LogosUiPluginContext
 {
 public:
     void refresh() override;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assertions for keystore_ui's accounts tree.
+"""Assertions for evm_keystore_ui's accounts tree.
 
 Two halves, and the split is the point.
 
@@ -16,7 +16,7 @@ they open sheets and toggle a disclosure, and press no confirm button. Port 3768
 Basecamp's inspector port. Only ever point this at a fixture app you started yourself.
 
 Run against a `logos-standalone-app` started with QT_QPA_PLATFORM=offscreen and
-QML_INSPECTOR_PORT=3768, with keystore_module and keystore_ui staged as the -dev variant, and a
+QML_INSPECTOR_PORT=3768, with keystore_module and evm_keystore_ui staged as the -dev variant, and a
 keystore holding at least two derivable wallets — the whole subject of this screen is two
 wallets whose first accounts sit at the same path.
 
@@ -182,8 +182,8 @@ check("and the sheet behind it is gone, not merely unreachable",
 # A QtRO slot with no caller is still an invocable surface on the replica in the shell
 # process, so the way to remove the option is to remove the slot as well.
 check("as is the slot that reached it",
-      "createUnrelatedAccount" in srctext("keystore_ui.rep")
-      or "createUnrelatedAccount" in srctext("keystore_ui_backend.cpp"), False)
+      "createUnrelatedAccount" in srctext("evm_keystore_ui.rep")
+      or "createUnrelatedAccount" in srctext("evm_keystore_ui_backend.cpp"), False)
 check("and it never hid inside the add sheet either",
       "createUnrelatedConfirm" in text("AddAccountSheet.qml"), False)
 
@@ -273,7 +273,7 @@ check("the origin line is PlainText",
       "textFormat: Text.PlainText" in block(view, 'objectName: "manageProvenance"'), True)
 
 print("0b2) a refused read is not an empty answer")
-rep, backend = srctext("keystore_ui.rep"), srctext("keystore_ui_backend.cpp")
+rep, backend = srctext("evm_keystore_ui.rep"), srctext("evm_keystore_ui_backend.cpp")
 # list_accounts can fail while list_groups succeeds — it goes through settle() and the vault
 # scan. Every wallet frame then said "No accounts", which is the read failing, stated as a
 # fact about the wallet. The view cannot see the difference unless the backend reports it.
@@ -343,7 +343,7 @@ check("and said out loud", 'objectName: "walletNameDuplicate"' in manage, True)
 print("0b5) one refusal does not overwrite the rest")
 # `forgetDerivation` called setLastError outright after refresh(), discarding the six reads
 # that refresh() had just appended — the overwrite the appending rule exists to prevent.
-saybody = block(backend, "void KeystoreUiBackend::say(", 4)
+saybody = block(backend, "void EvmKeystoreUiBackend::say(", 4)
 check("the helper appends", "lastError().isEmpty()" in saybody, True)
 check("and every message on this screen goes through it",
       [l.strip() for l in backend.replace(saybody, "").splitlines()

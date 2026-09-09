@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: logos-keystore-ui
+          path: logos-evm-keystore-ui
 
       - uses: actions/checkout@v4
         with:
@@ -77,7 +77,7 @@ jobs:
           path: logos-design-system
 
       - name: Section 0 — the claims a source file can answer for
-        working-directory: logos-keystore-ui
+        working-directory: logos-evm-keystore-ui
         shell: bash
         run: |
           set -euo pipefail
@@ -100,7 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: logos-keystore-ui
+          path: logos-evm-keystore-ui
 
       - uses: actions/checkout@v4
         with:
@@ -123,7 +123,7 @@ jobs:
             extra-trusted-public-keys = logos-co.cachix.org-1:12K8609ho1pCt0erUQrOrs/KmOuhWq/EhVwhzQRb35E=
 
       - name: Gate A — static (imports, type and property names)
-        working-directory: logos-keystore-ui
+        working-directory: logos-evm-keystore-ui
         # `-W 0` fails on the first WARNING; the Info-level unused-import notes
         # this tree carries are below that line and stay notes. `--unqualified`
         # is off because `logos` is injected by the host, so every view here
@@ -135,7 +135,7 @@ jobs:
                     -W 0 --unqualified disable src/qml/*.qml'
 
       - name: Gate B — construct the view for real
-        working-directory: logos-keystore-ui
+        working-directory: logos-evm-keystore-ui
         run: |
           nix shell nixpkgs#qt6.qtdeclarative nixpkgs#qt6.qtsvg -c bash -c '
             QTQML=$(dirname $(dirname $(readlink -f $(command -v qml))))/lib/qt-6/qml

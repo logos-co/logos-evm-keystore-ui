@@ -1,5 +1,5 @@
 {
-  description = "Logos keystore_ui — the one surface that creates, imports, exports and deletes accounts.";
+  description = "Logos evm_keystore_ui — the one surface that creates, imports, exports and deletes accounts.";
 
   inputs = {
     logos-module-builder.url = "github:logos-co/logos-module-builder";
