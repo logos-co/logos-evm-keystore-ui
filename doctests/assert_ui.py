@@ -370,8 +370,12 @@ check("a wallet keeps no derivation key only where the key directory was read",
                                  'objectName: "walletNothingToManage"', 8), True)
 check("and it says so where the claim would have been",
       'objectName: "walletKeysUnread"' in text("ManageWalletSheet.qml"), True)
-check("an unreadable keystore.json is not a mis-deployed custodian",
-      "identity.configError" in block(view, 'objectName: "notCustodianNotice"', 12), True)
+# The roles moved onto the keystore's `configure` method, so there is no config file to be
+# unreadable and `caller_identity` no longer carries `configError`.
+check("the notice explains no state the keystore can no longer be in",
+      "configError" in view or "keystore.json" in view, False)
+check("and it names the modules that do hold the role, read from the keystore",
+      "root.identity.custodians" in block(view, 'objectName: "notCustodianNotice"', 12), True)
 
 print("0k) the ordinal is the leftmost column, and a row without one is not ragged")
 # It sat after the address, so `#0` read as a property of that row rather than as its position

@@ -85,12 +85,6 @@ void EvmKeystoreUiBackend::loadIdentity()
     const QString me = o.value(QStringLiteral("identity")).toString();
     const QJsonArray custodians = o.value(QStringLiteral("custodians")).toArray();
     setIsCustodian(!me.isEmpty() && custodians.contains(QJsonValue(me)));
-
-    // An unreadable keystore.json empties both roles rather than reverting to the defaults.
-    // Say why, or "not the custodian" reads as a deployment mistake instead of a torn file.
-    const QString cfg = o.value(QStringLiteral("configError")).toString();
-    if (!cfg.isEmpty())
-        say(cfg);
 }
 
 void EvmKeystoreUiBackend::loadAccounts()

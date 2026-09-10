@@ -333,13 +333,12 @@ Item {
             visible: root.ready && !root.custodian
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            // An unreadable keystore.json empties BOTH roles rather than reverting to the
-            // defaults, so the cause is the file, not who was deployed.
-            text: (root.identity.configError || "").length > 0
-                  ? "The keystore could not read its own configuration, so no module holds the "
-                    + "custodian role and accounts cannot be changed here."
-                  : "This build is not the keystore's configured custodian, so accounts cannot "
-                    + "be changed here. The keystore names its custodian in keystore.json."
+            // The keystore holds the names; `configure` is what changes them. Naming who does
+            // hold the role separates "deployed the wrong way round" from "named nobody".
+            text: "This build is not the keystore's configured custodian, so accounts cannot "
+                  + "be changed here. The keystore names "
+                  + ((root.identity.custodians || []).join(", ") || "no module")
+                  + " as its custodian."
         }
 
         LogosText {
