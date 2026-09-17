@@ -10,7 +10,9 @@
   "main": "evm_keystore_ui_plugin",
   "icon": "src/icons/keystore.png",
   "view": "qml/KeystoreView.qml",
-  "dependencies": ["keystore_module"],
+  "dependencies": [
+    { "name": "keystore_module", "version": "~0.1.0" }
+  ],
   "provides": [
     { "intent": "evm.accounts.manage", "handoff": true }
   ],
