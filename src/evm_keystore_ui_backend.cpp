@@ -128,7 +128,8 @@ QString EvmKeystoreUiBackend::importBitcoinWith(QJsonObject p)
 }
 
 QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                                            QString password, QString label, QString keepPhrasePassword)
+                                            QString password, QString label, QString keepPhrasePassword,
+                                            QString origin, QString birthday)
 {
     QJsonObject p;
     p[QStringLiteral("phrase")] = phrase;
@@ -139,6 +140,10 @@ QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphr
     p[QStringLiteral("label")] = label;
     if (!keepPhrasePassword.isEmpty())
         p[QStringLiteral("keepPhrase")] = QJsonObject{ { QStringLiteral("password"), keepPhrasePassword } };
+    // A phrase made here starts today, by the keystore's clock; one brought in, from the day given.
+    p[QStringLiteral("origin")] = origin == QStringLiteral("created") ? origin : QStringLiteral("restored");
+    if (origin != QStringLiteral("created") && !birthday.trimmed().isEmpty())
+        p[QStringLiteral("birthday")] = birthday.trimmed();
     phrase.fill(QChar(0));
     bip39Passphrase.fill(QChar(0));
     password.fill(QChar(0));
@@ -147,7 +152,8 @@ QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphr
 }
 
 QString EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                                                    QString family, QString chain, QString password, QString label)
+                                                    QString family, QString chain, QString password, QString label,
+                                                    QString birthday)
 {
     QJsonObject p;
     p[QStringLiteral("keptPhrase")] = phraseId;
@@ -157,6 +163,9 @@ QString EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString ph
     p[QStringLiteral("chain")] = chain;
     p[QStringLiteral("password")] = password;
     p[QStringLiteral("label")] = label;
+    p[QStringLiteral("origin")] = QStringLiteral("restored");
+    if (!birthday.trimmed().isEmpty())
+        p[QStringLiteral("birthday")] = birthday.trimmed();
     phrasePassword.fill(QChar(0));
     bip39Passphrase.fill(QChar(0));
     password.fill(QChar(0));

@@ -89,6 +89,7 @@ fn drive(state: Shared) {
             let key_len = text(&v, "databaseKey").len();
             println!("{MARK}_WALLET: {}", text(&v, "group"));
             println!("{MARK}_OPENED: {} databaseKey={key_len} hex chars", text(&v, "external"));
+            println!("{MARK}_STARTS: origin={} birthday={}", text(&v, "origin"), text(&v, "birthday"));
             set!(json!({ "ok": true, "state": "opened", "group": text(&v, "group") }));
             text(&v, "group")
         }
