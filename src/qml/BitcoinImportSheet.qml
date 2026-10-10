@@ -31,7 +31,7 @@ LogosDialog {
     function clearForm() {
         source = "create"; phrase = ""; words = []; keptId = ""
         typedPhrase.text = ""; confirmWords.text = ""; passphrase.text = ""; keptPw.text = ""
-        walletPw.text = ""; walletName.text = ""; keep.reset()
+        birthday.text = ""; walletPw.text = ""; walletName.text = ""; keep.reset()
         createOption.checked = true
         if (presetFamily === "bitcoin_taproot") taproot.checked = true; else segwit.checked = true
         if (presetChain === "main") mainChain.checked = true; else testChain.checked = true
@@ -44,7 +44,10 @@ LogosDialog {
                                         : words.length === 12
                                           && confirmWords.text.trim().toLowerCase().split(/\s+/).join(" ")
                                              === [words[0], words[4], words[11]].join(" ")
-    readonly property bool complete: phraseReady && walletPw.text.length > 0
+    // The keystore checks it's a real day; here, only its shape.
+    readonly property bool birthdayOk: source === "create" || birthday.text.trim() === ""
+                                       || /^\d{4}-\d{2}-\d{2}$/.test(birthday.text.trim())
+    readonly property bool complete: phraseReady && birthdayOk && walletPw.text.length > 0
                                      && (source === "kept" || keep.complete)
 
     anchors.centerIn: parent
@@ -141,6 +144,24 @@ LogosDialog {
             text: "The passphrase is a second secret. Lose it and the phrase alone restores an empty wallet. It is never kept here."
         }
 
+        // Where apps start looking for a restored wallet's coins; a phrase made here starts today.
+        LogosTextField {
+            id: birthday
+            objectName: "btcBirthdayField"
+            visible: sheet.source !== "create"
+            Layout.fillWidth: true
+            placeholderText: "First used on, as YYYY-MM-DD (optional)"
+        }
+        LogosText {
+            visible: birthday.visible
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: sheet.birthdayOk ? Theme.palette.textSecondary : Theme.palette.warning
+            text: sheet.birthdayOk
+                  ? "Apps look for this wallet's coins from this day on. A day after its first use hides older coins; if unsure, leave it empty and they look from the beginning, which takes longer."
+                  : "Write the day as YYYY-MM-DD, such as 2021-11-14."
+        }
+
         // ── which wallet ──────────────────────────────────────────────────────────
         LogosText {
             objectName: "btcPresetNote"
@@ -199,12 +220,15 @@ LogosDialog {
                     var done = function (group) { if (group) { sheet.added(group); sheet.close() } }
                     if (sheet.source === "kept")
                         logos.watch(sheet.backend.importBitcoinFromKept(sheet.keptId, keptPw.text, passphrase.text,
-                                                                        family, chain, walletPw.text, walletName.text.trim()), done)
+                                                                        family, chain, walletPw.text, walletName.text.trim(),
+                                                                        birthday.text.trim()), done)
                     else
                         logos.watch(sheet.backend.importBitcoin(sheet.source === "type" ? typedPhrase.text : sheet.phrase,
                                                                 sheet.source === "type" ? passphrase.text : "",
                                                                 family, chain, walletPw.text, walletName.text.trim(),
-                                                                keep.password), done)
+                                                                keep.password,
+                                                                sheet.source === "create" ? "created" : "restored",
+                                                                sheet.source === "type" ? birthday.text.trim() : ""), done)
                 }
             }
         }

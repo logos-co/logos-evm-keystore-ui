@@ -33,7 +33,7 @@ for the app that asked, and the terms are still the person's.
 | Export | `export_keystore_json` |
 | Delete a stranded derivation key | `list_derivation_keys` → `forget_derivation` |
 | Delete | `delete_account` |
-| Bitcoin wallet… *(create, type, or use a kept phrase; native segwit or taproot; main or test)* | `create_mnemonic`, `import_bitcoin` |
+| Bitcoin wallet… *(create, type, or use a kept phrase; native segwit or taproot; main or test; for a typed or kept phrase, the day it was first used, so apps know where to start looking for its coins)* | `create_mnemonic`, `import_bitcoin` |
 | Manage a Bitcoin wallet → Show descriptor | `account_descriptors` |
 | Kept recovery phrases → Show or forget | `list_phrases`, `show_phrase`, `forget_phrase` |
 | Requests from apps *(open a wallet, unlock an account)* | the manager's `access_requests`, `acknowledge_access`, `approve_access`, `reject_access` |

@@ -55,9 +55,11 @@ public:
     bool changePassword(QString address, QString oldPassword, QString newPassword) override;
 
     QString importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                          QString password, QString label, QString keepPhrasePassword) override;
+                          QString password, QString label, QString keepPhrasePassword, QString origin,
+                          QString birthday) override;
     QString importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                                  QString family, QString chain, QString password, QString label) override;
+                                  QString family, QString chain, QString password, QString label,
+                                  QString birthday) override;
     QString showPhrase(QString phraseId, QString password) override;
     bool forgetPhrase(QString phraseId) override;
     QString walletDescriptors(QString group) override;
