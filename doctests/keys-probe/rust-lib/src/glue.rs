@@ -1,7 +1,7 @@
 //! The app half of the keys app's end-to-end proof.
 //!
 //!   1. name the keystore's and the manager's roles (ungated)
-//!   2. import a regtest Bitcoin wallet           (the keystore's custodian, for this run)
+//!   2. wait for the person to add a Bitcoin wallet in the keys app
 //!   3. request_open for any native segwit wallet on regtest, and wait
 //!   4. request_unlock for that wallet, two signatures, each confirmed, and wait
 //!
@@ -14,15 +14,11 @@ use std::time::Duration;
 
 type Shared = std::sync::Arc<std::sync::Mutex<Value>>;
 
-/// Foundry's published test phrase: never fund it.
-const PHRASE: &str = "test test test test test test test test test test test junk";
-const VAULT_PASSWORD: &str = "doctest-pw";
 const MARK: &str = "KEYS_PROBE";
 
-/// The keystore: the keys app administers it, this fixture imports the wallet, and only the
-/// manager may have it sign. The manager: the keys app decides open and unlock requests.
-const KEYSTORE_ROLES: &str =
-    r#"{"custodians":["evm_keystore_ui","keys_probe"],"managers":"signer_manager_module"}"#;
+/// The keystore: the keys app administers it, and only the manager may have it sign. The
+/// manager: the keys app decides open and unlock requests.
+const KEYSTORE_ROLES: &str = r#"{"custodians":"evm_keystore_ui","managers":"signer_manager_module"}"#;
 const MANAGER_ROLES: &str =
     r#"{"approvers":"evm_signer_ui","custodians":"evm_keystore_ui","signers":"keystore_module"}"#;
 
@@ -87,16 +83,24 @@ fn drive(state: Shared) {
         return;
     }
 
-    let import = json!({ "phrase": PHRASE, "family": "bitcoin", "chain": "test",
-                         "password": VAULT_PASSWORD, "label": "Regtest wallet" });
-    let group = match ok_value(modules().keystore_module.import_bitcoin(&import.to_string())) {
-        Ok(v) => text(&v, "group"),
-        Err(e) => {
-            println!("{MARK}_ERROR: import failed: {e}");
-            set!(json!({ "ok": false, "state": "import_failed", "error": e }));
-            return;
+    // The person adds the wallet in the keys app first; ask only once there is one to open.
+    let mut group = String::new();
+    for _ in 0..1200 {
+        std::thread::sleep(Duration::from_millis(250));
+        let Ok(v) = ok_value(modules().keystore_module.list_groups()) else { continue };
+        let found = v.get("groups").and_then(Value::as_array).and_then(|gs| {
+            gs.iter().find(|g| g.get("family").and_then(Value::as_str) == Some("bitcoin")).map(|g| text(g, "id"))
+        });
+        if let Some(g) = found {
+            group = g;
+            break;
         }
-    };
+    }
+    if group.is_empty() {
+        println!("{MARK}_ERROR: no Bitcoin wallet was added");
+        set!(json!({ "ok": false, "state": "no_wallet" }));
+        return;
+    }
     println!("{MARK}_WALLET: {group}");
 
     let open = json!({ "family": "bitcoin", "network": "regtest", "reason": "Doc-test: open the regtest wallet" });

@@ -169,7 +169,8 @@ jobs:
               echo "::error::qml exited $status (expected 124 = loaded and still running)"
               exit 1
             fi
-            if grep -qE "does not support customization|Cannot assign|was not found" /tmp/qml.log; then
+            # `invalid override`: a function named like a base signal, such as reset() on a Dialog, is dropped.
+            if grep -qE "does not support customization|Cannot assign|was not found|invalid override" /tmp/qml.log; then
               echo "::error::QML component errors above"; exit 1
             fi
             # `logos` is the host-injected global and is absent by construction

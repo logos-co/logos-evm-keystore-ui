@@ -78,6 +78,7 @@ Item {
 
     // The signer manager, as its custodian: apps' open and unlock requests, what is unlocked,
     // and which wallets are open for which apps.
+    readonly property var phrases: ready ? j(backend.phrasesJson, "[]") : []
     readonly property bool managerCustodian: ready && backend.isManagerCustodian
     readonly property var access: ready ? j(backend.accessJson, "[]") : []
     readonly property var accessShown: ready ? j(backend.accessShownJson, "{}") : ({})
@@ -120,7 +121,8 @@ Item {
     readonly property var refusedReads: {
         var say = { accounts: "the account list", labels: "account names",
                     groups: "the wallet list", provenance: "where each account came from",
-                    derivationKeys: "the derivation keys on disk", walletNames: "wallet names" }
+                    derivationKeys: "the derivation keys on disk", walletNames: "wallet names",
+                    phrases: "the kept recovery phrases" }
         var out = []
         for (var k in say) if (root.reads[k] === false) out.push(say[k])
         return out
@@ -259,7 +261,10 @@ Item {
         var bits = []
         var pre = walletSubtitleOf(n.group)
         if (pre.length > 0) bits.push(pre)
-        if (n.countKnown)
+        // A Bitcoin wallet has no EVM accounts to count: its addresses come from its descriptor.
+        if (n.group && n.group.family)
+            bits.push(n.group.family === "bitcoin_taproot" ? "Bitcoin, taproot" : "Bitcoin, native segwit")
+        else if (n.countKnown)
             bits.push(n.addresses.length === 1 ? "1 account" : n.addresses.length + " accounts")
         return bits.join("  ·  ")
     }
@@ -311,6 +316,9 @@ Item {
     // say "no accounts" — that is the read failing, stated as a fact about the wallet.
     function nodeEmptyLine(n) {
         if (n.kind !== "wallet" || !n.countKnown || n.addresses.length > 0) return ""
+        if (n.group && n.group.family)
+            return "Apps that open this wallet see its addresses and can ask you to sign; it holds no "
+                 + "EVM accounts."
         return n.group.derivable === true
                ? "No accounts. Adding one continues from #" + Tree.nextIndexOf(n.group) + "."
                : "No accounts. Adding one needs this wallet's recovery phrase."
@@ -323,6 +331,15 @@ Item {
              + "as it having none."
     }
     function nodeBadges(n) {
+        if (n.kind === "wallet" && n.group && n.group.family) {
+            var btc = [{ name: "walletBitcoin_" + n.id, text: n.group.chain === "main" ? "BITCOIN" : "BITCOIN TEST",
+                         color: Theme.palette.info }]
+            if (n.group.phrase)
+                btc.push({ name: "walletKeptPhrase_" + n.id, text: "PHRASE KEPT", color: Theme.palette.warning })
+            if (n.group.usedPassphrase === true)
+                btc.push({ name: "walletPassphrase_" + n.id, text: "PASSPHRASE", color: Theme.palette.textSecondary })
+            return btc
+        }
         if (n.kind === "wallet") {
             var out = [{ name: "walletBadge_" + n.id,
                          text: n.group.derivable ? "DERIVABLE" : "NOT DERIVABLE",
@@ -490,6 +507,36 @@ Item {
             }
         }
 
+        // ── Kept recovery phrases: off unless the person chose to keep one ──────────────
+        ColumnLayout {
+            objectName: "keptPhrases"
+            Layout.fillWidth: true
+            visible: root.phrases.length > 0
+            spacing: Theme.spacing.tiny
+            LogosText { text: "Kept recovery phrases"; font.bold: true }
+            Repeater {
+                model: root.phrases
+                delegate: RowLayout {
+                    Layout.fillWidth: true
+                    LogosText {
+                        objectName: "keptPhraseLine_" + index
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        text: "Phrase " + String(modelData.id).substring(0, 10) + "… — used by "
+                              + (modelData.groups || []).length + " wallet(s)"
+                              + (modelData.staged ? ", left by an interrupted write" : "")
+                    }
+                    LogosButton {
+                        objectName: "keptPhraseButton_" + index
+                        text: "Show or forget…"
+                        enabled: root.custodian
+                        onClicked: { keptPhraseSheet.kept = modelData; keptPhraseSheet.open() }
+                    }
+                }
+            }
+        }
+
         // A refusal names itself. Every one of these reads empties what it feeds, and each of
         // those empty answers is also a truthful screen for some keystore — so the difference
         // has to be said outright rather than left to be inferred from what is missing.
@@ -542,6 +589,12 @@ Item {
             LogosButton { objectName: "importPhraseButton"; text: "Import phrase"; enabled: root.custodian; onClicked: phraseSheet.open() }
             LogosButton { objectName: "importKeyButton";    text: "Import key";    enabled: root.custodian; onClicked: keySheet.open() }
             LogosButton { objectName: "importVaultButton";  text: "Import vault";  enabled: root.custodian; onClicked: vaultSheet.open() }
+            LogosButton {
+                objectName: "bitcoinWalletButton"
+                text: "Bitcoin wallet…"
+                enabled: root.custodian
+                onClicked: bitcoinImportSheet.open()
+            }
             LogosButton {
                 objectName: "unlockAccountButton"
                 text: "Unlock…"
@@ -603,6 +656,7 @@ Item {
                             expanded: root.collapsed[modelData.id] !== true
 
                             addVisible: modelData.kind === "wallet" && modelData.group.derivable === true
+                                        && !modelData.group.family
                             addEnabled: root.custodian
                             addBlockedLine: (modelData.kind === "wallet" && modelData.group.derivable !== true)
                                             ? "Adding an account needs this wallet's recovery phrase." : ""
@@ -617,6 +671,11 @@ Item {
                             onToggleRequested: root.toggle(modelData.id)
                             onAddRequested: { addSheet.group = modelData.group; addSheet.open() }
                             onManageWalletRequested: {
+                                if (modelData.group && modelData.group.family) {
+                                    bitcoinWalletSheet.group = modelData.group
+                                    bitcoinWalletSheet.open()
+                                    return
+                                }
                                 walletSheet.group = modelData.group
                                 walletSheet.stranded = root.isKeyFrame(modelData)
                                 walletSheet.recordKnown = modelData.kind !== "unreadKey"
@@ -650,6 +709,11 @@ Item {
         onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
     }
     UnlockSheet { id: unlockSheet; backend: root.backend; accounts: root.unlockable }
+
+    // ── Bitcoin wallets and kept phrases ───────────────────────────────────────────
+    BitcoinImportSheet { id: bitcoinImportSheet; backend: root.backend; phrases: root.phrases }
+    BitcoinWalletSheet { id: bitcoinWalletSheet; backend: root.backend; view: root }
+    KeptPhraseSheet { id: keptPhraseSheet; backend: root.backend }
     ManageWalletSheet {
         id: walletSheet
         backend: root.backend

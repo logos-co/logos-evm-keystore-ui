@@ -31,6 +31,9 @@ nobody asking, and closes wallets opened for apps.
 | Export | `export_keystore_json` |
 | Delete a stranded derivation key | `list_derivation_keys` → `forget_derivation` |
 | Delete | `delete_account` |
+| Bitcoin wallet… *(create, type, or use a kept phrase; native segwit or taproot; main or test)* | `create_mnemonic`, `import_bitcoin` |
+| Manage a Bitcoin wallet → Show descriptor | `account_descriptors` |
+| Kept recovery phrases → Show or forget | `list_phrases`, `show_phrase`, `forget_phrase` |
 | Requests from apps *(open a wallet, unlock an account)* | the manager's `access_requests`, `acknowledge_access`, `approve_access`, `reject_access` |
 | Unlock… / Unlocked / Lock all | the manager's `unlock`, `unlocked`, `lock` |
 | Open in apps / Close | the manager's `open_accounts`, `close_account` |
@@ -252,9 +255,11 @@ python3 doctests/assert_ui.py               # the rest, against an app on port 3
 ```
 
 `doctests/evm-keystore-ui-e2e.test.yaml` runs the keys app in a headless host beside the
-`keys_probe` fixture, which imports a regtest wallet, asks to open it and then to unlock it for
-two confirmed signatures. It drives the decisions over the QML inspector and checks what the
-fixture was handed: the descriptors, a 32-byte database key, and the terms the person granted.
+`keys_probe` fixture. The person adds a regtest Bitcoin wallet, keeping its phrase; the fixture
+asks to open it and then to unlock it for two confirmed signatures; the person decides both,
+then shows the descriptor and the kept phrase behind their warnings and forgets the phrase. It
+checks what the fixture was handed: the descriptors, a 32-byte database key, and the terms the
+person granted.
 
 ## Building
 

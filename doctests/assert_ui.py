@@ -278,8 +278,9 @@ rep, backend = srctext("evm_keystore_ui.rep"), srctext("evm_keystore_ui_backend.
 # scan. Every wallet frame then said "No accounts", which is the read failing, stated as a
 # fact about the wallet. The view cannot see the difference unless the backend reports it.
 check("the backend reports which reads answered", "readsJson" in rep, True)
+# Seven since the kept recovery phrases: a refused one is named like the other six.
 check("and every read is recorded, not just surfaced",
-      backend.count("read(QStringLiteral("), 6)
+      backend.count("read(QStringLiteral("), 7)
 check("the view no longer infers a refusal from an empty list",
       "accounts.length === 0" in view, False)
 check("a refusal names itself", 'objectName: "refusedReadsNotice"' in view, True)

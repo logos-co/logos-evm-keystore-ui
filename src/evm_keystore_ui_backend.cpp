@@ -99,6 +99,103 @@ void EvmKeystoreUiBackend::onContextReady()
     refresh();
 }
 
+void EvmKeystoreUiBackend::loadPhrases()
+{
+    const QString reply = modules().keystore_module.list_phrases();
+    setPhrasesJson(read(QStringLiteral("phrases"), reply, QStringLiteral("kept phrases"))
+                       ? compact(parseObject(reply).value(QStringLiteral("phrases")))
+                       : QStringLiteral("[]"));
+    publishReads();
+}
+
+bool EvmKeystoreUiBackend::importBitcoinWith(QJsonObject p)
+{
+    setLastError(QString());
+    QString body = params(p);
+    for (const QString &k : { QStringLiteral("phrase"), QStringLiteral("passphrase"), QStringLiteral("password"),
+                              QStringLiteral("phrasePassword") })
+        p.remove(k);
+    const bool good = ok(modules().keystore_module.import_bitcoin(body), QStringLiteral("Bitcoin wallet"));
+    body.fill(QChar(0));
+    if (good)
+        refresh();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
+                                         QString password, QString label, QString keepPhrasePassword)
+{
+    QJsonObject p;
+    p[QStringLiteral("phrase")] = phrase;
+    p[QStringLiteral("passphrase")] = bip39Passphrase;
+    p[QStringLiteral("family")] = family;
+    p[QStringLiteral("chain")] = chain;
+    p[QStringLiteral("password")] = password;
+    p[QStringLiteral("label")] = label;
+    if (!keepPhrasePassword.isEmpty())
+        p[QStringLiteral("keepPhrase")] = QJsonObject{ { QStringLiteral("password"), keepPhrasePassword } };
+    phrase.fill(QChar(0));
+    bip39Passphrase.fill(QChar(0));
+    password.fill(QChar(0));
+    keepPhrasePassword.fill(QChar(0));
+    return importBitcoinWith(p);
+}
+
+bool EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                                                 QString family, QString chain, QString password, QString label)
+{
+    QJsonObject p;
+    p[QStringLiteral("keptPhrase")] = phraseId;
+    p[QStringLiteral("phrasePassword")] = phrasePassword;
+    p[QStringLiteral("passphrase")] = bip39Passphrase;
+    p[QStringLiteral("family")] = family;
+    p[QStringLiteral("chain")] = chain;
+    p[QStringLiteral("password")] = password;
+    p[QStringLiteral("label")] = label;
+    phrasePassword.fill(QChar(0));
+    bip39Passphrase.fill(QChar(0));
+    password.fill(QChar(0));
+    return importBitcoinWith(p);
+}
+
+QString EvmKeystoreUiBackend::showPhrase(QString phraseId, QString password)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("phrase")] = phraseId;
+    p[QStringLiteral("password")] = password;
+    QString body = params(p);
+    password.fill(QChar(0));
+    const QString reply = modules().keystore_module.show_phrase(body);
+    body.fill(QChar(0));
+    if (!ok(reply, QStringLiteral("show phrase")))
+        return {};
+    return parseObject(reply).value(QStringLiteral("words")).toString();
+}
+
+bool EvmKeystoreUiBackend::forgetPhrase(QString phraseId)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("phrase")] = phraseId;
+    const bool good = ok(modules().keystore_module.forget_phrase(params(p)), QStringLiteral("forget phrase"));
+    refresh();
+    return good;
+}
+
+QString EvmKeystoreUiBackend::walletDescriptors(QString group)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("group")] = group;
+    const QString reply = modules().keystore_module.account_descriptors(params(p));
+    if (!ok(reply, QStringLiteral("descriptor")))
+        return {};
+    QJsonObject o = parseObject(reply);
+    o.remove(QStringLiteral("ok"));
+    return compact(o);
+}
+
 void EvmKeystoreUiBackend::refreshAccess()
 {
     const QJsonObject id = parseObject(modules().signer_manager_module.caller_identity());
@@ -303,6 +400,7 @@ void EvmKeystoreUiBackend::refresh()
     loadIdentity();
     loadAccounts();
     loadGroups();
+    loadPhrases();
     refreshAccess();
     setStatusText(isCustodian() ? QStringLiteral("Ready")
                                 : QStringLiteral("Not the configured custodian"));

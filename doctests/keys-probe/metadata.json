@@ -1,7 +1,7 @@
 {
   "name": "keys_probe",
   "version": "1.0.0",
-  "description": "Doc-test fixture: an app that asks the signer manager to open a Bitcoin wallet and then to unlock it, and reports what it was handed. Also the keystore's custodian, to import the wallet.",
+  "description": "Doc-test fixture: an app that asks the signer manager to open a Bitcoin wallet and then to unlock it, and reports what it was handed.",
   "author": "Logos Core Team",
   "type": "core",
   "interface": "cdylib",

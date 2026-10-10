@@ -49,6 +49,14 @@ public:
     bool setLabel(QString address, QString label, QString password) override;
     bool setWalletName(QString group, QString name, QString address, QString password) override;
     bool changePassword(QString address, QString oldPassword, QString newPassword) override;
+
+    bool importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
+                       QString password, QString label, QString keepPhrasePassword) override;
+    bool importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                               QString family, QString chain, QString password, QString label) override;
+    QString showPhrase(QString phraseId, QString password) override;
+    bool forgetPhrase(QString phraseId) override;
+    QString walletDescriptors(QString group) override;
     bool deleteAccount(QString address, QString password) override;
 
 protected:
@@ -71,6 +79,8 @@ private:
     void loadAccounts();
     void loadGroups();
     void loadIdentity();
+    void loadPhrases();
+    bool importBitcoinWith(QJsonObject p);
 
     QJsonObject m_reads;
 };
