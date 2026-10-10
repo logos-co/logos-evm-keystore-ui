@@ -114,6 +114,25 @@ fn drive(state: Shared) {
         }
     }
 
+    // A wallet whose key is on the mock device: its first open sets the password of its data.
+    let device = json!({ "group": "mock-segwit", "network": "regtest", "reason": "Doc-test: open the device's wallet" });
+    match ask_and_wait("DEVICE_OPEN", modules().signer_manager_module.request_open(&device.to_string()).map_err(|e| format!("{e:?}"))) {
+        Ok(v) => {
+            println!(
+                "{MARK}_DEVICE_OPENED: origin={} birthday={} databaseKey={} hex chars",
+                text(&v, "origin"),
+                text(&v, "birthday"),
+                text(&v, "databaseKey").len()
+            );
+            set!(json!({ "ok": true, "state": "device_opened" }));
+        }
+        Err(e) => {
+            println!("{MARK}_ERROR: device open: {e}");
+            set!(json!({ "ok": false, "state": "device_open_failed", "error": e }));
+            return;
+        }
+    }
+
     std::thread::sleep(Duration::from_millis(1000));
     match ok_value(modules().mock_device_signer.plug(false)) {
         Ok(_) => println!("{MARK}_UNPLUGGED"),

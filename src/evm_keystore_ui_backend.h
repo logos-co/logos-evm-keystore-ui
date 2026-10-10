@@ -23,7 +23,8 @@ public:
     void refreshAccess() override;
     bool showAccess(QString handle) override;
     bool approveAccess(QString handle, QString bundleId, QString group, QString password,
-                       QString unlockJson) override;
+                       QString unlockJson, QString birthday) override;
+    bool forgetDeviceWallet(QString signer, QString account) override;
     bool rejectAccess(QString handle) override;
     void dismissAccess() override;
     bool unlockAccount(QString account, QString password, QString termsJson) override;

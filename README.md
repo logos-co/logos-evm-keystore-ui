@@ -41,7 +41,9 @@ for the app that asked, and the terms are still the person's.
 | Unlock… / Unlocked / Lock all | the manager's `unlock`, `unlocked`, `lock` |
 | Unlock, from the Signer *(`keystore.accounts.unlock`: the account offered first)* | the manager's `unlock` |
 | Open in apps / Close | the manager's `open_accounts`, `close_account` |
-| On devices *(accounts a device's signer module offers; read only)* | the manager's `accounts` |
+| Requests from apps → a wallet on a device *(nothing to unlock; its first open sets the password of its data, and the day it was first used)* | the manager's `approve_access`, which makes its key with the keystore's `device_database_key` |
+| On devices *(accounts a device's signer module offers, and whether their data password is set)* | the manager's `accounts`, the keystore's `device_wallets` |
+| On devices → Forget data password… *(the way out of a forgotten one; apps then read the wallet's history again)* | `forget_device_wallet` |
 
 There is no plain "create account" button, and no way here to a key generated from randomness
 rather than derived from a phrase. `create_unrelated_account` stays on the keystore's contract —

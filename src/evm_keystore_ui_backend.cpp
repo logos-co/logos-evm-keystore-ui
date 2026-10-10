@@ -197,6 +197,17 @@ bool EvmKeystoreUiBackend::forgetPhrase(QString phraseId)
     return good;
 }
 
+bool EvmKeystoreUiBackend::forgetDeviceWallet(QString signer, QString account)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("signer")] = signer;
+    p[QStringLiteral("account")] = account;
+    const bool good = ok(modules().keystore_module.forget_device_wallet(params(p)), QStringLiteral("forget device wallet"));
+    refreshAccess();
+    return good;
+}
+
 QString EvmKeystoreUiBackend::walletDescriptors(QString group)
 {
     setLastError(QString());
@@ -219,6 +230,11 @@ void EvmKeystoreUiBackend::refreshAccess()
         if (a.toObject().value(QStringLiteral("signer")).toString() != QLatin1String("keystore_module"))
             devices.append(a);
     setDeviceAccountsJson(compact(devices));
+    // Which of them have a database key here: the first open of one sets its password.
+    const QString wallets = modules().keystore_module.device_wallets();
+    setDeviceWalletsJson(read(QStringLiteral("wallets"), wallets, QStringLiteral("device wallets"))
+                             ? compact(parseObject(wallets).value(QStringLiteral("wallets")))
+                             : QStringLiteral("[]"));
 
     const QJsonObject id = parseObject(modules().signer_manager_module.caller_identity());
     const QString me = id.value(QStringLiteral("identity")).toString();
@@ -263,7 +279,7 @@ bool EvmKeystoreUiBackend::showAccess(QString handle)
 }
 
 bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QString group,
-                                         QString password, QString unlockJson)
+                                         QString password, QString unlockJson, QString birthday)
 {
     setLastError(QString());
     // Only what is on screen, and refused before the password is used for anything else.
@@ -283,6 +299,8 @@ bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QStri
     const QJsonObject terms = QJsonDocument::fromJson(unlockJson.toUtf8()).object();
     if (!terms.isEmpty())
         p[QStringLiteral("unlock")] = terms;
+    if (!birthday.trimmed().isEmpty())
+        p[QStringLiteral("birthday")] = birthday.trimmed();
     QString body = params(p);
     password.fill(QChar(0));
     const bool good = okManager(modules().signer_manager_module.approve_access(body), QString());
