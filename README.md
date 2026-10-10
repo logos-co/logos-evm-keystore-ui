@@ -21,8 +21,8 @@ for the app that asked, and the terms are still the person's.
 | Screen | Keystore method |
 |---|---|
 | Accounts | `list_accounts`, `get_labels`, `list_groups`, `list_derivation_keys`, `get_provenance`, `get_group_labels` *(all ungated)* |
-| Create | `create_mnemonic` → shown once → confirmed → `import_mnemonic` |
-| Import phrase | `import_mnemonic` |
+| Create *(keeping the phrase is offered)* | `create_mnemonic` → shown once → confirmed → `import_mnemonic` |
+| Import phrase *(typed, keeping it is offered; or a kept phrase)* | `import_mnemonic` |
 | Import private key | `import_private_key` |
 | Import vault | `import_keystore_json` |
 | Add account *(on a wallet's own row)* | `derive_next_account` |
@@ -262,9 +262,10 @@ python3 doctests/assert_ui.py               # the rest, against an app on port 3
 `keys_probe` fixture. The fixture asks to open any native segwit wallet on regtest before one
 exists, so the person adds one from the request, keeping its phrase, and opens it. The fixture
 then asks to unlock it for two confirmed signatures, and the person grants that too. Then the
-person shows the descriptor and the kept phrase behind their warnings and forgets the phrase.
-Last, the Signer's `keystore.accounts.unlock` arrives for an imported key: the host has no shell,
-so the spec calls the view's own handler, and the person unlocks the account offered. The spec
+person shows the descriptor, makes an EVM wallet from the kept phrase without typing it, and
+shows and forgets the phrase. Last, the Signer's `keystore.accounts.unlock` arrives for the EVM
+wallet's account: the host has no shell, so the spec calls the view's own handler, and the person
+unlocks the account offered. The spec
 checks what the fixture was handed: the descriptors, a 32-byte database key, and the terms the
 person granted.
 

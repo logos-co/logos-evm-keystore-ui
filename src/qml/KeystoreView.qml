@@ -358,6 +358,8 @@ Item {
             var out = [{ name: "walletBadge_" + n.id,
                          text: n.group.derivable ? "DERIVABLE" : "NOT DERIVABLE",
                          color: n.group.derivable ? Theme.palette.info : Theme.palette.textSecondary }]
+            if (n.group.phrase)
+                out.push({ name: "walletKeptPhrase_" + n.id, text: "PHRASE KEPT", color: Theme.palette.warning })
             if (n.group.usedPassphrase === true)
                 out.push({ name: "walletPassphrase_" + n.id, text: "PASSPHRASE",
                            color: Theme.palette.textSecondary })
@@ -846,8 +848,8 @@ Item {
         // Held here only, and cleared on close. Never a property.
         property string phrase: ""
         property var words: []
-        onOpened: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset() }
-        onClosed: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset() }
+        onOpened: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset(); createKeep.reset() }
+        onClosed: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset(); createKeep.reset() }
 
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
@@ -922,6 +924,12 @@ Item {
                 visible: createSheet.phrase.length > 0
                 Layout.fillWidth: true
             }
+            KeepPhraseChoice {
+                id: createKeep
+                namePrefix: "create"
+                visible: createSheet.phrase.length > 0
+                Layout.fillWidth: true
+            }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -933,7 +941,7 @@ Item {
                     // The confirmation is the point: an unwritten phrase is an unrecoverable
                     // account, so it is checked here before anything is stored.
                     enabled: createSheet.words.length === 12 && newPw.text.length > 0
-                             && createStorage.complete
+                             && createStorage.complete && createKeep.complete
                              && confirmField.text.trim().toLowerCase().split(/\s+/).join(" ")
                                 === [createSheet.words[0], createSheet.words[4], createSheet.words[11]].join(" ")
                     // No BIP-39 passphrase on a phrase we just generated: it would be a second
@@ -941,7 +949,8 @@ Item {
                     onClicked: logos.watch(root.backend.importMnemonic(createSheet.phrase, "", newPw.text,
                                                                        createStorage.groupPassword,
                                                                        createStorage.derivable,
-                                                                       createName.text.trim()),
+                                                                       createName.text.trim(),
+                                                                       createKeep.password),
                         function (good) { if (good) createSheet.close() })
                 }
             }
@@ -955,15 +964,49 @@ Item {
         title: "Import a recovery phrase"
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
-        onOpened: { seedField.text = ""; seedPassphrase.text = ""; seedPw.text = ""; seedName.text = ""; phraseStorage.reset() }
-        onClosed: { seedField.text = ""; seedPassphrase.text = ""; seedPw.text = ""; seedName.text = ""; phraseStorage.reset() }
+        // Typed words, or a phrase kept earlier with its own password.
+        property string source: "type"
+        property string keptId: ""
+        // Not `reset`: a Dialog already has a reset() signal, which would be emitted instead.
+        function clearForm() {
+            seedField.text = ""; seedPassphrase.text = ""; seedPw.text = ""; seedName.text = ""; phraseStorage.reset()
+            source = "type"; keptId = ""; seedKeptPw.text = ""; importKeep.reset(); seedTypeOption.checked = true
+        }
+        onOpened: clearForm()
+        onClosed: clearForm()
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
+            ButtonGroup { id: seedSourceGroup }
+            RowLayout {
+                visible: root.phrases.length > 0
+                LogosRadioButton { id: seedTypeOption; objectName: "importSourceType"; ButtonGroup.group: seedSourceGroup; checked: true; text: "Type a phrase"; onCheckedChanged: if (checked) phraseSheet.source = "type" }
+                LogosRadioButton { objectName: "importSourceKept"; ButtonGroup.group: seedSourceGroup; text: "Use a kept phrase"; onCheckedChanged: if (checked) phraseSheet.source = "kept" }
+            }
             LogosTextArea {
                 id: seedField
                 objectName: "seedField"
+                visible: phraseSheet.source === "type"
                 Layout.fillWidth: true
                 placeholderText: "Recovery phrase (BIP-39 words)"
+            }
+            ButtonGroup { id: seedKeptGroup }
+            Repeater {
+                model: phraseSheet.source === "kept" ? root.phrases : []
+                delegate: LogosRadioButton {
+                    objectName: "importKept_" + index
+                    ButtonGroup.group: seedKeptGroup
+                    text: "Kept phrase " + String(modelData.id).substring(0, 10) + "…, used by "
+                          + (modelData.groups || []).length + " wallet(s)"
+                    onCheckedChanged: if (checked) phraseSheet.keptId = modelData.id
+                }
+            }
+            LogosTextField {
+                id: seedKeptPw
+                objectName: "importKeptPasswordField"
+                visible: phraseSheet.source === "kept"
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: "The kept phrase's password"
             }
 
             // Visible by default, never behind a disclosure: a passphrase that is silently
@@ -1018,6 +1061,12 @@ Item {
                 objectName: "importStorageChoice"
                 Layout.fillWidth: true
             }
+            KeepPhraseChoice {
+                id: importKeep
+                namePrefix: "import"
+                visible: phraseSheet.source === "type"
+                Layout.fillWidth: true
+            }
             RowLayout {
                 Layout.fillWidth: true
                 LogosButton { text: "Cancel"; onClicked: phraseSheet.close() }
@@ -1025,15 +1074,23 @@ Item {
                 LogosButton {
                     objectName: "importPhraseConfirm"
                     text: "Import"
-                    enabled: seedField.text.trim().length > 0 && seedPw.text.length > 0
-                             && phraseStorage.complete
-                    onClicked: logos.watch(root.backend.importMnemonic(seedField.text.trim(),
-                                                                      seedPassphrase.text,
-                                                                      seedPw.text,
-                                                                      phraseStorage.groupPassword,
-                                                                      phraseStorage.derivable,
-                                                                      seedName.text.trim()),
-                        function (good) { if (good) phraseSheet.close() })
+                    enabled: (phraseSheet.source === "kept" ? phraseSheet.keptId !== "" && seedKeptPw.text.length > 0
+                                                            : seedField.text.trim().length > 0 && importKeep.complete)
+                             && seedPw.text.length > 0 && phraseStorage.complete
+                    onClicked: {
+                        var done = function (good) { if (good) phraseSheet.close() }
+                        if (phraseSheet.source === "kept")
+                            logos.watch(root.backend.importMnemonicFromKept(phraseSheet.keptId, seedKeptPw.text,
+                                                                            seedPassphrase.text, seedPw.text,
+                                                                            phraseStorage.groupPassword,
+                                                                            phraseStorage.derivable,
+                                                                            seedName.text.trim()), done)
+                        else
+                            logos.watch(root.backend.importMnemonic(seedField.text.trim(), seedPassphrase.text,
+                                                                    seedPw.text, phraseStorage.groupPassword,
+                                                                    phraseStorage.derivable, seedName.text.trim(),
+                                                                    importKeep.password), done)
+                    }
                 }
             }
         }

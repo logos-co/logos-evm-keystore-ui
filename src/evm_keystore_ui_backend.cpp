@@ -417,14 +417,10 @@ QString EvmKeystoreUiBackend::generateMnemonic(int words)
     return parseObject(reply).value(QStringLiteral("phrase")).toString();
 }
 
-bool EvmKeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
-                                          QString accountPassword, QString groupPassword,
-                                          bool derivable, QString groupLabel)
+bool EvmKeystoreUiBackend::importMnemonicWith(QJsonObject p, QString accountPassword, QString groupPassword,
+                                              bool derivable, QString groupLabel)
 {
     setLastError(QString());
-    QJsonObject p;
-    p[QStringLiteral("phrase")] = phrase;
-    p[QStringLiteral("passphrase")] = bip39Passphrase;
     p[QStringLiteral("password")] = accountPassword;
     // The wallet's name, kept whichever storage is chosen: a group record is written for both,
     // and this is the only moment the keystore accepts one.
@@ -434,10 +430,46 @@ bool EvmKeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphras
     p[QStringLiteral("storage")] = derivable ? QStringLiteral("extkey") : QStringLiteral("plain");
     if (derivable)
         p[QStringLiteral("groupPassword")] = groupPassword;
-    const bool good = ok(modules().keystore_module.import_mnemonic(params(p)), QString());
+    QString body = params(p);
+    for (const QString &k : { QStringLiteral("phrase"), QStringLiteral("passphrase"), QStringLiteral("password"),
+                              QStringLiteral("phrasePassword"), QStringLiteral("keepPhrase"),
+                              QStringLiteral("groupPassword") })
+        p.remove(k);
+    accountPassword.fill(QChar(0));
+    groupPassword.fill(QChar(0));
+    const bool good = ok(modules().keystore_module.import_mnemonic(body), QString());
+    body.fill(QChar(0));
     if (good)
         refresh();
     return good;
+}
+
+bool EvmKeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
+                                          QString accountPassword, QString groupPassword,
+                                          bool derivable, QString groupLabel, QString keepPhrasePassword)
+{
+    QJsonObject p;
+    p[QStringLiteral("phrase")] = phrase;
+    p[QStringLiteral("passphrase")] = bip39Passphrase;
+    if (!keepPhrasePassword.isEmpty())
+        p[QStringLiteral("keepPhrase")] = QJsonObject{ { QStringLiteral("password"), keepPhrasePassword } };
+    phrase.fill(QChar(0));
+    bip39Passphrase.fill(QChar(0));
+    keepPhrasePassword.fill(QChar(0));
+    return importMnemonicWith(p, accountPassword, groupPassword, derivable, groupLabel);
+}
+
+bool EvmKeystoreUiBackend::importMnemonicFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                                                  QString accountPassword, QString groupPassword, bool derivable,
+                                                  QString groupLabel)
+{
+    QJsonObject p;
+    p[QStringLiteral("keptPhrase")] = phraseId;
+    p[QStringLiteral("phrasePassword")] = phrasePassword;
+    p[QStringLiteral("passphrase")] = bip39Passphrase;
+    phrasePassword.fill(QChar(0));
+    bip39Passphrase.fill(QChar(0));
+    return importMnemonicWith(p, accountPassword, groupPassword, derivable, groupLabel);
 }
 
 bool EvmKeystoreUiBackend::importPrivateKey(QString privHex, QString accountPassword)

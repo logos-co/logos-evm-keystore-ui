@@ -6,7 +6,7 @@
     # Pinned to the branch with Bitcoin wallets, kept phrases and their descriptors, until it
     # reaches main.
     keystore_module = {
-      url = "github:logos-co/logos-evm-keystore-module/c4d5908a0f0688a8f442de6dd1ec2cfc33782d4b";
+      url = "github:logos-co/logos-evm-keystore-module/15c44cc01550ba1b1a92e0a55ef29f17207b818d";
       inputs.logos-module-builder.follows = "logos-module-builder";
     };
     # The keys app is the manager's custodian: it decides open and unlock requests. Pinned to the

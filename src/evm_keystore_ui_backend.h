@@ -32,7 +32,11 @@ public:
 
     QString generateMnemonic(int words) override;
     bool importMnemonic(QString phrase, QString bip39Passphrase, QString accountPassword,
-                        QString groupPassword, bool derivable, QString groupLabel) override;
+                        QString groupPassword, bool derivable, QString groupLabel,
+                        QString keepPhrasePassword) override;
+    bool importMnemonicFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                                QString accountPassword, QString groupPassword, bool derivable,
+                                QString groupLabel) override;
     bool importPrivateKey(QString privHex, QString accountPassword) override;
     bool importVaultJson(QString vaultJson, QString oldPassword, QString newPassword) override;
 
@@ -81,6 +85,8 @@ private:
     void loadIdentity();
     void loadPhrases();
     QString importBitcoinWith(QJsonObject p);
+    bool importMnemonicWith(QJsonObject p, QString accountPassword, QString groupPassword, bool derivable,
+                            QString groupLabel);
 
     QJsonObject m_reads;
 };

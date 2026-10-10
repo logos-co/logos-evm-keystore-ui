@@ -31,7 +31,7 @@ LogosDialog {
     function clearForm() {
         source = "create"; phrase = ""; words = []; keptId = ""
         typedPhrase.text = ""; confirmWords.text = ""; passphrase.text = ""; keptPw.text = ""
-        walletPw.text = ""; walletName.text = ""; keepPhrase.checked = false; keepPw.text = ""
+        walletPw.text = ""; walletName.text = ""; keep.reset()
         createOption.checked = true
         if (presetFamily === "bitcoin_taproot") taproot.checked = true; else segwit.checked = true
         if (presetChain === "main") mainChain.checked = true; else testChain.checked = true
@@ -45,7 +45,7 @@ LogosDialog {
                                           && confirmWords.text.trim().toLowerCase().split(/\s+/).join(" ")
                                              === [words[0], words[4], words[11]].join(" ")
     readonly property bool complete: phraseReady && walletPw.text.length > 0
-                                     && (!keepPhrase.checked || source === "kept" || keepPw.text.length > 0)
+                                     && (source === "kept" || keep.complete)
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 600)
@@ -178,30 +178,11 @@ LogosDialog {
         }
 
         // ── keeping the phrase ────────────────────────────────────────────────────
-        LogosCheckbox {
-            id: keepPhrase
-            objectName: "btcKeepPhrase"
+        KeepPhraseChoice {
+            id: keep
+            namePrefix: "btc"
             visible: sheet.source !== "kept"
-            text: "Keep the recovery phrase"
-        }
-        LogosText {
-            objectName: "btcKeepRisk"
-            visible: keepPhrase.visible && keepPhrase.checked
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            color: Theme.palette.warning
-            text: "You can see the phrase again and add wallets without typing it. Someone with a copy of "
-                  + "this keystore and this password gets every account of every coin this phrase makes, "
-                  + "including ones never created here. Keep it only if you would keep the paper copy on "
-                  + "this computer too."
-        }
-        LogosTextField {
-            id: keepPw
-            objectName: "btcKeepPasswordField"
-            visible: keepPhrase.visible && keepPhrase.checked
-            Layout.fillWidth: true
-            echoMode: TextInput.Password
-            placeholderText: "A password for the kept phrase"
         }
 
         RowLayout {
@@ -223,7 +204,7 @@ LogosDialog {
                         logos.watch(sheet.backend.importBitcoin(sheet.source === "type" ? typedPhrase.text : sheet.phrase,
                                                                 sheet.source === "type" ? passphrase.text : "",
                                                                 family, chain, walletPw.text, walletName.text.trim(),
-                                                                keepPhrase.checked ? keepPw.text : ""), done)
+                                                                keep.password), done)
                 }
             }
         }
