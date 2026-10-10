@@ -50,10 +50,10 @@ public:
     bool setWalletName(QString group, QString name, QString address, QString password) override;
     bool changePassword(QString address, QString oldPassword, QString newPassword) override;
 
-    bool importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                       QString password, QString label, QString keepPhrasePassword) override;
-    bool importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                               QString family, QString chain, QString password, QString label) override;
+    QString importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
+                          QString password, QString label, QString keepPhrasePassword) override;
+    QString importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                                  QString family, QString chain, QString password, QString label) override;
     QString showPhrase(QString phraseId, QString password) override;
     bool forgetPhrase(QString phraseId) override;
     QString walletDescriptors(QString group) override;
@@ -80,7 +80,7 @@ private:
     void loadGroups();
     void loadIdentity();
     void loadPhrases();
-    bool importBitcoinWith(QJsonObject p);
+    QString importBitcoinWith(QJsonObject p);
 
     QJsonObject m_reads;
 };

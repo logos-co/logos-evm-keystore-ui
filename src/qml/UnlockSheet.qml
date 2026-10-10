@@ -16,11 +16,28 @@ LogosDialog {
     // `[{ id, name }]`: EVM accounts by address, Bitcoin wallets by id.
     property var accounts: []
     property string picked: ""
+    // From another app's request: the account to offer and the app the unlock would cover.
+    property string presetAccount: ""
+    property string presetApp: ""
+    property bool unlockedNow: false
+
+    signal finished(bool unlocked)
+
+    function applyPresets() {
+        picked = ""; pw.text = ""; terms.load({})
+        if (presetApp !== "") terms.defaultApps(presetApp)
+        for (var i = 0; i < accountRepeater.count; ++i) {
+            var hit = presetAccount !== "" && String(accounts[i].id).toLowerCase() === presetAccount.toLowerCase()
+            accountRepeater.itemAt(i).checked = hit
+            if (hit) picked = accounts[i].id
+        }
+    }
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 600)
 
-    onOpened: { picked = ""; pw.text = ""; terms.load({}) }
+    onOpened: { unlockedNow = false; applyPresets() }
+    onClosed: { var u = unlockedNow; presetAccount = ""; presetApp = ""; finished(u) }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -28,6 +45,7 @@ LogosDialog {
         LogosText { text: "Which account"; color: Theme.palette.textSecondary }
         ButtonGroup { id: accountGroup }
         Repeater {
+            id: accountRepeater
             model: sheet.accounts
             delegate: LogosRadioButton {
                 objectName: "unlockAccount_" + index
@@ -58,7 +76,7 @@ LogosDialog {
                 enabled: sheet.picked !== "" && pw.text.length > 0 && terms.complete
                 onClicked: {
                     logos.watch(sheet.backend.unlockAccount(sheet.picked, pw.text, JSON.stringify(terms.value)),
-                                function (ok) { if (ok) sheet.close() })
+                                function (ok) { if (ok) { sheet.unlockedNow = true; sheet.close() } })
                     pw.text = ""
                 }
             }

@@ -108,22 +108,23 @@ void EvmKeystoreUiBackend::loadPhrases()
     publishReads();
 }
 
-bool EvmKeystoreUiBackend::importBitcoinWith(QJsonObject p)
+QString EvmKeystoreUiBackend::importBitcoinWith(QJsonObject p)
 {
     setLastError(QString());
     QString body = params(p);
     for (const QString &k : { QStringLiteral("phrase"), QStringLiteral("passphrase"), QStringLiteral("password"),
                               QStringLiteral("phrasePassword") })
         p.remove(k);
-    const bool good = ok(modules().keystore_module.import_bitcoin(body), QStringLiteral("Bitcoin wallet"));
+    const QString reply = modules().keystore_module.import_bitcoin(body);
     body.fill(QChar(0));
-    if (good)
-        refresh();
-    return good;
+    if (!ok(reply, QStringLiteral("Bitcoin wallet")))
+        return QString();
+    refresh();
+    return parseObject(reply).value(QStringLiteral("group")).toString();
 }
 
-bool EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                                         QString password, QString label, QString keepPhrasePassword)
+QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
+                                            QString password, QString label, QString keepPhrasePassword)
 {
     QJsonObject p;
     p[QStringLiteral("phrase")] = phrase;
@@ -141,8 +142,8 @@ bool EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase
     return importBitcoinWith(p);
 }
 
-bool EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                                                 QString family, QString chain, QString password, QString label)
+QString EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
+                                                    QString family, QString chain, QString password, QString label)
 {
     QJsonObject p;
     p[QStringLiteral("keptPhrase")] = phraseId;

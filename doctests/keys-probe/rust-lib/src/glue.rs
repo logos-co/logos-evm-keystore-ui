@@ -1,9 +1,8 @@
 //! The app half of the keys app's end-to-end proof.
 //!
 //!   1. name the keystore's and the manager's roles (ungated)
-//!   2. wait for the person to add a Bitcoin wallet in the keys app
-//!   3. request_open for any native segwit wallet on regtest, and wait
-//!   4. request_unlock for that wallet, two signatures, each confirmed, and wait
+//!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
+//!   3. request_unlock for that wallet, two signatures, each confirmed, and wait
 //!
 //! The person decides 3 and 4 in the keys app; this module only asks, and prints what it was
 //! handed with its receipt. It runs on its own thread, so the first outbound call cannot
@@ -83,39 +82,22 @@ fn drive(state: Shared) {
         return;
     }
 
-    // The person adds the wallet in the keys app first; ask only once there is one to open.
-    let mut group = String::new();
-    for _ in 0..1200 {
-        std::thread::sleep(Duration::from_millis(250));
-        let Ok(v) = ok_value(modules().keystore_module.list_groups()) else { continue };
-        let found = v.get("groups").and_then(Value::as_array).and_then(|gs| {
-            gs.iter().find(|g| g.get("family").and_then(Value::as_str) == Some("bitcoin")).map(|g| text(g, "id"))
-        });
-        if let Some(g) = found {
-            group = g;
-            break;
-        }
-    }
-    if group.is_empty() {
-        println!("{MARK}_ERROR: no Bitcoin wallet was added");
-        set!(json!({ "ok": false, "state": "no_wallet" }));
-        return;
-    }
-    println!("{MARK}_WALLET: {group}");
-
-    let open = json!({ "family": "bitcoin", "network": "regtest", "reason": "Doc-test: open the regtest wallet" });
-    match ask_and_wait("OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
+    // No wallet exists yet: the person adds one from the request itself.
+    let open = json!({ "family": "bitcoin", "network": "regtest", "reason": "Doc-test: open a regtest wallet" });
+    let group = match ask_and_wait("OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
             let key_len = text(&v, "databaseKey").len();
+            println!("{MARK}_WALLET: {}", text(&v, "group"));
             println!("{MARK}_OPENED: {} databaseKey={key_len} hex chars", text(&v, "external"));
             set!(json!({ "ok": true, "state": "opened", "group": text(&v, "group") }));
+            text(&v, "group")
         }
         Err(e) => {
             println!("{MARK}_ERROR: open: {e}");
             set!(json!({ "ok": false, "state": "open_failed", "error": e }));
             return;
         }
-    }
+    };
 
     let unlock = json!({ "account": group, "count": 2, "confirm": true, "apps": ["keys_probe"],
                          "reason": "Doc-test: two signatures" });

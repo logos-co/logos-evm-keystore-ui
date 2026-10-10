@@ -21,16 +21,23 @@ LogosDialog {
     property string phrase: ""
     property var words: []
     property string keptId: ""
+    // Set by an app's open request: the kind and chain it asked for, fixed for this wallet.
+    property string presetFamily: ""
+    property string presetChain: ""
+
+    signal added(string group)
 
     // Not `reset`: a Dialog already has a reset() signal, which would be emitted instead.
     function clearForm() {
         source = "create"; phrase = ""; words = []; keptId = ""
         typedPhrase.text = ""; confirmWords.text = ""; passphrase.text = ""; keptPw.text = ""
         walletPw.text = ""; walletName.text = ""; keepPhrase.checked = false; keepPw.text = ""
-        segwit.checked = true; testChain.checked = true; createOption.checked = true
+        createOption.checked = true
+        if (presetFamily === "bitcoin_taproot") taproot.checked = true; else segwit.checked = true
+        if (presetChain === "main") mainChain.checked = true; else testChain.checked = true
     }
     onOpened: clearForm()
-    onClosed: clearForm()
+    onClosed: { presetFamily = ""; presetChain = ""; clearForm() }
 
     readonly property bool phraseReady: source === "type" ? typedPhrase.text.trim().split(/\s+/).length >= 12
                                         : source === "kept" ? keptId !== "" && keptPw.text.length > 0
@@ -135,13 +142,23 @@ LogosDialog {
         }
 
         // ── which wallet ──────────────────────────────────────────────────────────
+        LogosText {
+            objectName: "btcPresetNote"
+            visible: sheet.presetFamily !== ""
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: "The app's request decides the kind of wallet and its network."
+        }
         ButtonGroup { id: familyGroup }
         RowLayout {
+            enabled: sheet.presetFamily === ""
             LogosRadioButton { id: segwit; objectName: "btcFamilySegwit"; ButtonGroup.group: familyGroup; checked: true; text: "Native segwit" }
             LogosRadioButton { id: taproot; objectName: "btcFamilyTaproot"; ButtonGroup.group: familyGroup; text: "Taproot" }
         }
         ButtonGroup { id: chainGroup }
         RowLayout {
+            enabled: sheet.presetChain === ""
             LogosRadioButton { id: mainChain; objectName: "btcChainMain"; ButtonGroup.group: chainGroup; text: "Bitcoin" }
             LogosRadioButton { id: testChain; objectName: "btcChainTest"; ButtonGroup.group: chainGroup; checked: true; text: "Test networks (testnet, signet, regtest)" }
         }
@@ -198,7 +215,7 @@ LogosDialog {
                 onClicked: {
                     var family = segwit.checked ? "bitcoin" : "bitcoin_taproot"
                     var chain = mainChain.checked ? "main" : "test"
-                    var done = function (good) { if (good) sheet.close() }
+                    var done = function (group) { if (group) { sheet.added(group); sheet.close() } }
                     if (sheet.source === "kept")
                         logos.watch(sheet.backend.importBitcoinFromKept(sheet.keptId, keptPw.text, passphrase.text,
                                                                         family, chain, walletPw.text, walletName.text.trim()), done)

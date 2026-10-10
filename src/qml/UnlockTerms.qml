@@ -10,6 +10,9 @@ import Logos.Theme
 ColumnLayout {
     id: terms
 
+    // Two sheets hold these terms; each names its own, so a test finds the one on screen.
+    property string namePrefix: "unlock"
+
     // Prefill from what an app asked: `{ ttlMs?, count?, apps?, confirm? }`.
     function load(asked) {
         var t = asked || {}
@@ -61,12 +64,12 @@ ColumnLayout {
     LogosText { text: "How long"; color: Theme.palette.textSecondary }
     ButtonGroup { id: ttlGroup }
     RowLayout {
-        LogosRadioButton { id: ttlShort; objectName: "unlockTtlShort"; ButtonGroup.group: ttlGroup; text: "15 minutes"; checked: true }
-        LogosRadioButton { id: ttlHour; objectName: "unlockTtlHour"; ButtonGroup.group: ttlGroup; text: "An hour" }
-        LogosRadioButton { id: ttlUntilLocked; objectName: "unlockTtlUntilLocked"; ButtonGroup.group: ttlGroup; text: "Until I lock it" }
+        LogosRadioButton { id: ttlShort; objectName: terms.namePrefix + "TtlShort"; ButtonGroup.group: ttlGroup; text: "15 minutes"; checked: true }
+        LogosRadioButton { id: ttlHour; objectName: terms.namePrefix + "TtlHour"; ButtonGroup.group: ttlGroup; text: "An hour" }
+        LogosRadioButton { id: ttlUntilLocked; objectName: terms.namePrefix + "TtlUntilLocked"; ButtonGroup.group: ttlGroup; text: "Until I lock it" }
         LogosRadioButton {
             id: ttlAsked
-            objectName: "unlockTtlAsked"
+            objectName: terms.namePrefix + "TtlAsked"
             ButtonGroup.group: ttlGroup
             visible: terms.askedTtl !== null
             text: "As asked: " + Math.round((terms.askedTtl || 0) / 60000) + " minutes"
@@ -76,12 +79,12 @@ ColumnLayout {
     LogosText { text: "How many signatures"; color: Theme.palette.textSecondary }
     ButtonGroup { id: countGroup }
     RowLayout {
-        LogosRadioButton { id: countOne; objectName: "unlockCountOne"; ButtonGroup.group: countGroup; text: "One"; checked: true }
-        LogosRadioButton { id: countTen; objectName: "unlockCountTen"; ButtonGroup.group: countGroup; text: "Up to ten" }
-        LogosRadioButton { id: countAny; objectName: "unlockCountAny"; ButtonGroup.group: countGroup; text: "No limit" }
+        LogosRadioButton { id: countOne; objectName: terms.namePrefix + "CountOne"; ButtonGroup.group: countGroup; text: "One"; checked: true }
+        LogosRadioButton { id: countTen; objectName: terms.namePrefix + "CountTen"; ButtonGroup.group: countGroup; text: "Up to ten" }
+        LogosRadioButton { id: countAny; objectName: terms.namePrefix + "CountAny"; ButtonGroup.group: countGroup; text: "No limit" }
         LogosRadioButton {
             id: countAsked
-            objectName: "unlockCountAsked"
+            objectName: terms.namePrefix + "CountAsked"
             ButtonGroup.group: countGroup
             visible: terms.askedCount !== null
             text: "As asked: " + terms.askedCount
@@ -91,7 +94,7 @@ ColumnLayout {
     LogosText { text: "Apps it covers"; color: Theme.palette.textSecondary }
     LogosTextField {
         id: appsField
-        objectName: "unlockAppsField"
+        objectName: terms.namePrefix + "AppsField"
         Layout.fillWidth: true
         placeholderText: "Module names, separated by commas — * for any app"
     }
@@ -99,13 +102,13 @@ ColumnLayout {
     ButtonGroup { id: confirmGroup }
     LogosRadioButton {
         id: confirmEach
-        objectName: "unlockConfirmEach"
+        objectName: terms.namePrefix + "ConfirmEach"
         ButtonGroup.group: confirmGroup
         checked: true
         text: "Confirm each signature, no password"
     }
     LogosText {
-        objectName: "unlockConfirmRisk"
+        objectName: terms.namePrefix + "ConfirmRisk"
         Layout.fillWidth: true
         Layout.leftMargin: Theme.spacing.xlarge
         visible: confirmEach.checked
@@ -118,13 +121,13 @@ ColumnLayout {
     }
     LogosRadioButton {
         id: withoutAsking
-        objectName: "unlockWithoutAsking"
+        objectName: terms.namePrefix + "WithoutAsking"
         ButtonGroup.group: confirmGroup
         enabled: !terms.anyApp
         text: "Sign without asking"
     }
     LogosText {
-        objectName: "unlockWithoutAskingRisk"
+        objectName: terms.namePrefix + "WithoutAskingRisk"
         Layout.fillWidth: true
         Layout.leftMargin: Theme.spacing.xlarge
         visible: withoutAsking.checked

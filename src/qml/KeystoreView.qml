@@ -31,30 +31,44 @@ Item {
         function onViewModuleReadyChanged(moduleName, isReady) {
             if (moduleName === "evm_keystore_ui") root.ready = isReady && root.backend !== null
         }
-
-        // Somebody wants accounts managed, and the shell has already brought us forward —
-        // arriving IS the request, so answer now rather than waiting for the human to do
-        // something. `handoff: true` is what leaves them here instead of bouncing them back.
-        //
-        // Answered `ok` even when this build is not the custodian. The request was to reach
-        // the accounts surface and it did; whether accounts can be CHANGED from here is what
-        // the READ ONLY badge and its banner are for, and `ready` may still be false at the
-        // instant we are dispatched, so gating on it would refuse a request that succeeded.
         function onIntentRequested(requestId, intent, params, requesterName) {
-            if (intent === "keystore.accounts.open") {
-                // An app's open or unlock request, by the manager's handle. Answered when the
-                // person decides; a handle the manager does not hold is a bad request.
-                root.intentByHandle[params.handle] = requestId
-                logos.watch(root.backend.showAccess(params.handle), function (opened) {
-                    if (opened) accessSheet.open()
-                    else root.answerIntent(params.handle, false, "bad_request")
-                })
-                return
-            }
-            if (intent !== "evm.accounts.manage") return
-            logos.respond(requestId, true, ({}), "")
+            root.serviceIntent(requestId, intent, params, requesterName)
         }
     }
+
+    // Somebody wants accounts managed, and the shell has already brought us forward —
+    // arriving IS the request, so answer now rather than waiting for the human to do
+    // something. `handoff: true` is what leaves them here instead of bouncing them back.
+    //
+    // Answered `ok` even when this build is not the custodian. The request was to reach
+    // the accounts surface and it did; whether accounts can be CHANGED from here is what
+    // the READ ONLY badge and its banner are for, and `ready` may still be false at the
+    // instant we are dispatched, so gating on it would refuse a request that succeeded.
+    function serviceIntent(requestId, intent, params, requesterName) {
+        if (intent === "keystore.accounts.open") {
+            // An app's open or unlock request, by the manager's handle. Answered when the
+            // person decides; a handle the manager does not hold is a bad request.
+            root.intentByHandle[params.handle] = requestId
+            logos.watch(root.backend.showAccess(params.handle), function (opened) {
+                if (opened) accessSheet.open()
+                else root.answerIntent(params.handle, false, "bad_request")
+            })
+            return
+        }
+        if (intent === "keystore.accounts.unlock") {
+            // Another app sends the person here to unlock an account: offered first, terms theirs.
+            // Answered when they unlock or leave; a newer request ends the one it replaces.
+            if (root.unlockIntent !== "") logos.respond(root.unlockIntent, false, ({}), "cancelled")
+            root.unlockIntent = requestId
+            unlockSheet.presetAccount = params.account || ""
+            unlockSheet.presetApp = params.app || ""
+            if (unlockSheet.opened) unlockSheet.applyPresets(); else unlockSheet.open()
+            return
+        }
+        if (intent !== "evm.accounts.manage") return
+        logos.respond(requestId, true, ({}), "")
+    }
+    property string unlockIntent: ""
 
     // Intents being serviced, keyed by the manager's handle each one named.
     property var intentByHandle: ({})
@@ -707,11 +721,30 @@ Item {
         wallets: root.bitcoinWallets
         onDecided: function (handle, approved) { root.answerIntent(handle, approved, approved ? "" : "rejected") }
         onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
+        onAddWallet: function (family, chain) {
+            bitcoinImportSheet.presetFamily = family
+            bitcoinImportSheet.presetChain = chain
+            bitcoinImportSheet.open()
+        }
     }
-    UnlockSheet { id: unlockSheet; backend: root.backend; accounts: root.unlockable }
+    UnlockSheet {
+        id: unlockSheet
+        backend: root.backend
+        accounts: root.unlockable
+        onFinished: function (unlocked) {
+            if (root.unlockIntent === "") return
+            logos.respond(root.unlockIntent, unlocked, ({}), unlocked ? "" : "cancelled")
+            root.unlockIntent = ""
+        }
+    }
 
     // ── Bitcoin wallets and kept phrases ───────────────────────────────────────────
-    BitcoinImportSheet { id: bitcoinImportSheet; backend: root.backend; phrases: root.phrases }
+    BitcoinImportSheet {
+        id: bitcoinImportSheet
+        backend: root.backend
+        phrases: root.phrases
+        onAdded: function (group) { if (accessSheet.opened) accessSheet.pickWallet(group) }
+    }
     BitcoinWalletSheet { id: bitcoinWalletSheet; backend: root.backend; view: root }
     KeptPhraseSheet { id: keptPhraseSheet; backend: root.backend }
     ManageWalletSheet {

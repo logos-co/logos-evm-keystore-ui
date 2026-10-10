@@ -21,6 +21,8 @@ LogosDialog {
 
     signal decided(string handle, bool approved)
     signal deferred(string handle)
+    // The person adds a wallet of the kind asked for; it comes back through pickWallet.
+    signal addWallet(string family, string chain)
 
     readonly property bool isOpen: shown.kind === "open"
     readonly property var asked: shown.asked || ({})
@@ -34,6 +36,11 @@ LogosDialog {
         return w.family === sheet.asked.family && w.chain === sheet.chainOf(sheet.asked.network)
     })
     property string picked: ""
+    function pickWallet(group) {
+        picked = group
+        for (var i = 0; i < walletRepeater.count; ++i)
+            if (sheet.choices[i].id === group) walletRepeater.itemAt(i).checked = true
+    }
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 600)
@@ -64,19 +71,28 @@ LogosDialog {
         // ── open: which wallet, and what that hands over ───────────────────────────
         LogosText {
             visible: sheet.picks
-            text: sheet.choices.length > 0 ? "Pick the wallet to open:"
-                  : "No wallet here matches. Create or restore one, then open the request again."
+            text: sheet.choices.length > 0 ? "Pick the wallet to open, or add one:"
+                  : "No wallet here matches. Add one, and it is picked here."
             color: Theme.palette.textSecondary
         }
         ButtonGroup { id: walletGroup }
         Repeater {
+            id: walletRepeater
             model: sheet.choices
             delegate: LogosRadioButton {
                 objectName: "accessWallet_" + index
                 ButtonGroup.group: walletGroup
                 text: modelData.name
                 onCheckedChanged: if (checked) sheet.picked = modelData.id
+                // The list is rebuilt when wallets change; keep the pick checked.
+                Component.onCompleted: if (modelData.id === sheet.picked) checked = true
             }
+        }
+        LogosButton {
+            objectName: "accessAddWallet"
+            visible: sheet.picks
+            text: "Add a wallet…"
+            onClicked: sheet.addWallet(sheet.asked.family || "bitcoin", sheet.chainOf(sheet.asked.network))
         }
         LogosText {
             objectName: "accessOpenRisk"
@@ -98,6 +114,7 @@ LogosDialog {
         // ── the terms, for an unlock request or an open that unlocks too ───────────
         UnlockTerms {
             id: terms
+            namePrefix: "access"
             Layout.fillWidth: true
             visible: !sheet.isOpen || alsoUnlock.checked
         }
