@@ -41,6 +41,7 @@ for the app that asked, and the terms are still the person's.
 | Unlock… / Unlocked / Lock all | the manager's `unlock`, `unlocked`, `lock` |
 | Unlock, from the Signer *(`keystore.accounts.unlock`: the account offered first)* | the manager's `unlock` |
 | Open in apps / Close | the manager's `open_accounts`, `close_account` |
+| On devices *(accounts a device's signer module offers; read only)* | the manager's `accounts` |
 
 There is no plain "create account" button, and no way here to a key generated from randomness
 rather than derived from a phrase. `create_unrelated_account` stays on the keystore's contract —

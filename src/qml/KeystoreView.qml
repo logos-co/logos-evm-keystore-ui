@@ -98,6 +98,7 @@ Item {
     readonly property var accessShown: ready ? j(backend.accessShownJson, "{}") : ({})
     readonly property var unlocked: ready ? j(backend.unlockedJson, "[]") : []
     readonly property var openWallets: ready ? j(backend.openJson, "[]") : []
+    readonly property var deviceAccounts: ready ? j(backend.deviceAccountsJson, "[]") : []
     readonly property var bitcoinWallets: root.groups.filter(function (g) { return !!g.family })
         .map(function (g) {
             return { id: g.id, name: root.walletNameOf(g.id) || g.id, family: g.family, chain: g.chain }
@@ -519,6 +520,26 @@ Item {
                         onClicked: logos.watch(root.backend.closeWallet(modelData.module, modelData.group),
                                                function () {})
                     }
+                }
+            }
+        }
+
+        // ── Accounts on devices: offered by their own signer modules, beside the key files ─
+        ColumnLayout {
+            objectName: "deviceAccounts"
+            Layout.fillWidth: true
+            visible: root.deviceAccounts.length > 0
+            spacing: Theme.spacing.tiny
+            LogosText { text: "On devices"; font.bold: true }
+            Repeater {
+                model: root.deviceAccounts
+                delegate: LogosText {
+                    objectName: "deviceLine_" + index
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                    text: (modelData.label || modelData.id) + " — " + modelData.signer
+                          + (modelData.available ? ", connected" : ", not connected")
                 }
             }
         }

@@ -3,6 +3,7 @@
 //!   1. name the keystore's and the manager's roles (ungated)
 //!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
 //!   3. request_unlock for that wallet, two signatures, each confirmed, and wait
+//!   4. unplug the mock device: the keys app keeps its accounts listed, not connected
 //!
 //! The person decides 3 and 4 in the keys app; this module only asks, and prints what it was
 //! handed with its receipt. It runs on its own thread, so the first outbound call cannot
@@ -16,10 +17,9 @@ type Shared = std::sync::Arc<std::sync::Mutex<Value>>;
 const MARK: &str = "KEYS_PROBE";
 
 /// The keystore: the keys app administers it, and only the manager may have it sign. The
-/// manager: the keys app decides open and unlock requests.
+/// manager: the keys app decides open and unlock requests, and a mock device signs beside the keystore.
 const KEYSTORE_ROLES: &str = r#"{"custodians":"evm_keystore_ui","managers":"signer_manager_module"}"#;
-const MANAGER_ROLES: &str =
-    r#"{"approvers":"evm_signer_ui","custodians":"evm_keystore_ui","signers":"keystore_module"}"#;
+const MANAGER_ROLES: &str = r#"{"approvers":"evm_signer_ui","custodians":"evm_keystore_ui","signers":["keystore_module","mock_device_signer"]}"#;
 
 pub trait KeysProbeModule: Send + 'static {
     /// What the probe has got so far: `{ ok, state, … }`. Ungated: a fixture holding nothing secret.
@@ -109,7 +109,14 @@ fn drive(state: Shared) {
         Err(e) => {
             println!("{MARK}_ERROR: unlock: {e}");
             set!(json!({ "ok": false, "state": "unlock_failed", "error": e }));
+            return;
         }
+    }
+
+    std::thread::sleep(Duration::from_millis(1000));
+    match ok_value(modules().mock_device_signer.plug(false)) {
+        Ok(_) => println!("{MARK}_UNPLUGGED"),
+        Err(e) => println!("{MARK}_ERROR: unplug: {e}"),
     }
 }
 

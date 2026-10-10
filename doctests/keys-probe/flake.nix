@@ -13,6 +13,11 @@
       inputs.logos-module-builder.follows = "logos-module-builder";
       inputs.keystore_module.follows = "keystore_module";
     };
+    # A signer that behaves like a device, so its accounts show beside the keystore's.
+    mock_device_signer = {
+      url = "github:logos-co/logos-signer-manager-module/1a385f4e41ef54f388a192037bd9d9aa7165a505?dir=doctests/mock-device";
+      inputs.logos-module-builder.follows = "logos-module-builder";
+    };
   };
 
   outputs = inputs@{ self, logos-module-builder, ... }:

@@ -96,6 +96,10 @@ void EvmKeystoreUiBackend::onContextReady()
     modules().signer_manager_module.onUnlock_changed([this](QString) {
         QTimer::singleShot(0, this, [this] { refreshAccess(); });
     });
+    // A device plugged in or out, or a signer added: its accounts are re-read.
+    modules().signer_manager_module.onAccounts_changed([this](auto) {
+        QTimer::singleShot(0, this, [this] { refreshAccess(); });
+    });
     refresh();
 }
 
@@ -199,6 +203,14 @@ QString EvmKeystoreUiBackend::walletDescriptors(QString group)
 
 void EvmKeystoreUiBackend::refreshAccess()
 {
+    // Any named module may list accounts: the ones a signer other than the keystore offers.
+    QJsonArray devices;
+    for (const QJsonValue &a : parseObject(modules().signer_manager_module.accounts())
+                                   .value(QStringLiteral("accounts")).toArray())
+        if (a.toObject().value(QStringLiteral("signer")).toString() != QLatin1String("keystore_module"))
+            devices.append(a);
+    setDeviceAccountsJson(compact(devices));
+
     const QJsonObject id = parseObject(modules().signer_manager_module.caller_identity());
     const QString me = id.value(QStringLiteral("identity")).toString();
     const bool custodian = !me.isEmpty()
