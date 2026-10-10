@@ -53,6 +53,21 @@ bool EvmKeystoreUiBackend::ok(const QString &reply, const QString &context)
     return false;
 }
 
+bool EvmKeystoreUiBackend::okManager(const QString &reply, const QString &context)
+{
+    const QJsonObject o = parseObject(reply);
+    if (o.value(QStringLiteral("ok")).toBool())
+        return true;
+    QString e = o.value(QStringLiteral("error")).toString();
+    if (e.isEmpty())
+        e = QStringLiteral("the signer manager refused the request");
+    if (e == QLatin1String("not authorized"))
+        e = QStringLiteral("this build is not the signer manager's configured custodian, so it may "
+                           "not open or unlock accounts for apps");
+    say(context.isEmpty() ? e : QStringLiteral("%1: %2").arg(context, e));
+    return false;
+}
+
 bool EvmKeystoreUiBackend::read(const QString &key, const QString &reply, const QString &context)
 {
     const bool good = ok(reply, context);
@@ -71,7 +86,146 @@ void EvmKeystoreUiBackend::onContextReady()
     modules().keystore_module.onAccounts_changed([this](int) {
         QTimer::singleShot(0, [this] { refresh(); });
     });
+    // Requests from apps, and unlocks ending or changing. Handles only; re-read off the IPC stack.
+    modules().signer_manager_module.onAccess_requested([this](QString) {
+        QTimer::singleShot(0, this, [this] { refreshAccess(); });
+    });
+    modules().signer_manager_module.onAccess_settled([this](QString, QString) {
+        QTimer::singleShot(0, this, [this] { refreshAccess(); });
+    });
+    modules().signer_manager_module.onUnlock_changed([this](QString) {
+        QTimer::singleShot(0, this, [this] { refreshAccess(); });
+    });
     refresh();
+}
+
+void EvmKeystoreUiBackend::refreshAccess()
+{
+    const QJsonObject id = parseObject(modules().signer_manager_module.caller_identity());
+    const QString me = id.value(QStringLiteral("identity")).toString();
+    const bool custodian = !me.isEmpty()
+        && id.value(QStringLiteral("custodians")).toArray().contains(QJsonValue(me));
+    setIsManagerCustodian(custodian);
+    if (!custodian) {
+        setAccessJson(QStringLiteral("[]"));
+        setUnlockedJson(QStringLiteral("[]"));
+        setOpenJson(QStringLiteral("[]"));
+        return;
+    }
+    const QJsonObject q = parseObject(modules().signer_manager_module.access_requests());
+    setAccessJson(compact(q.value(QStringLiteral("requests")).toArray()));
+    const QJsonObject u = parseObject(modules().signer_manager_module.unlocked());
+    setUnlockedJson(compact(u.value(QStringLiteral("unlocked")).toArray()));
+    const QJsonObject o = parseObject(modules().signer_manager_module.open_accounts());
+    setOpenJson(compact(o.value(QStringLiteral("open")).toArray()));
+    // A request that settled elsewhere leaves the screen with it.
+    const QString shown = parseObject(accessShownJson()).value(QStringLiteral("handle")).toString();
+    if (!shown.isEmpty()) {
+        bool still = false;
+        for (const QJsonValue &r : q.value(QStringLiteral("requests")).toArray())
+            still = still || r.toObject().value(QStringLiteral("handle")).toString() == shown;
+        if (!still)
+            setAccessShownJson(QStringLiteral("{}"));
+    }
+}
+
+bool EvmKeystoreUiBackend::showAccess(QString handle)
+{
+    setLastError(QString());
+    const QString reply = modules().signer_manager_module.acknowledge_access(handle);
+    if (!okManager(reply, QStringLiteral("open the request"))) {
+        setAccessShownJson(QStringLiteral("{}"));
+        return false;
+    }
+    QJsonObject shown = parseObject(reply);
+    shown.remove(QStringLiteral("ok"));
+    setAccessShownJson(compact(shown));
+    return true;
+}
+
+bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QString group,
+                                         QString password, QString unlockJson)
+{
+    setLastError(QString());
+    // Only what is on screen, and refused before the password is used for anything else.
+    const QJsonObject shown = parseObject(accessShownJson());
+    if (handle.isEmpty() || shown.value(QStringLiteral("handle")).toString() != handle
+        || shown.value(QStringLiteral("bundle_id")).toString() != bundleId) {
+        say(QStringLiteral("That is not the request on screen."));
+        password.fill(QChar(0));
+        return false;
+    }
+    QJsonObject p;
+    p[QStringLiteral("handle")] = handle;
+    p[QStringLiteral("bundle_id")] = bundleId;
+    p[QStringLiteral("password")] = password;
+    if (!group.isEmpty())
+        p[QStringLiteral("group")] = group;
+    const QJsonObject terms = QJsonDocument::fromJson(unlockJson.toUtf8()).object();
+    if (!terms.isEmpty())
+        p[QStringLiteral("unlock")] = terms;
+    QString body = params(p);
+    password.fill(QChar(0));
+    const bool good = okManager(modules().signer_manager_module.approve_access(body), QString());
+    body.fill(QChar(0));
+    if (good) {
+        setAccessShownJson(QStringLiteral("{}"));
+        setStatusText(QStringLiteral("Done for %1").arg(shown.value(QStringLiteral("requester")).toString()));
+    }
+    refreshAccess();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::rejectAccess(QString handle)
+{
+    setLastError(QString());
+    const bool good = modules().signer_manager_module.reject_access(handle);
+    if (good)
+        setAccessShownJson(QStringLiteral("{}"));
+    refreshAccess();
+    return good;
+}
+
+void EvmKeystoreUiBackend::dismissAccess()
+{
+    setAccessShownJson(QStringLiteral("{}"));
+}
+
+bool EvmKeystoreUiBackend::unlockAccount(QString account, QString password, QString termsJson)
+{
+    setLastError(QString());
+    QJsonObject p = QJsonDocument::fromJson(termsJson.toUtf8()).object();
+    p[QStringLiteral("account")] = account;
+    p[QStringLiteral("password")] = password;
+    QString body = params(p);
+    password.fill(QChar(0));
+    const bool good = okManager(modules().signer_manager_module.unlock(body), QStringLiteral("unlock"));
+    body.fill(QChar(0));
+    refreshAccess();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::lockAccount(QString account)
+{
+    setLastError(QString());
+    QJsonObject p;
+    if (!account.isEmpty())
+        p[QStringLiteral("account")] = account;
+    const bool good = okManager(modules().signer_manager_module.lock(params(p)), QStringLiteral("lock"));
+    refreshAccess();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::closeWallet(QString module, QString group)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("group")] = group;
+    p[QStringLiteral("module")] = module;
+    const bool good =
+        okManager(modules().signer_manager_module.close_account(params(p)), QStringLiteral("close"));
+    refreshAccess();
+    return good;
 }
 
 void EvmKeystoreUiBackend::loadIdentity()
@@ -149,6 +303,7 @@ void EvmKeystoreUiBackend::refresh()
     loadIdentity();
     loadAccounts();
     loadGroups();
+    refreshAccess();
     setStatusText(isCustodian() ? QStringLiteral("Ready")
                                 : QStringLiteral("Not the configured custodian"));
     setBusy(false);

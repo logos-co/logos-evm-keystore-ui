@@ -20,6 +20,15 @@ class EvmKeystoreUiBackend : public EvmKeystoreUiSimpleSource,
 {
 public:
     void refresh() override;
+    void refreshAccess() override;
+    bool showAccess(QString handle) override;
+    bool approveAccess(QString handle, QString bundleId, QString group, QString password,
+                       QString unlockJson) override;
+    bool rejectAccess(QString handle) override;
+    void dismissAccess() override;
+    bool unlockAccount(QString account, QString password, QString termsJson) override;
+    bool lockAccount(QString account) override;
+    bool closeWallet(QString module, QString group) override;
 
     QString generateMnemonic(int words) override;
     bool importMnemonic(QString phrase, QString bip39Passphrase, QString accountPassword,
@@ -56,6 +65,8 @@ private:
     /// `ok`, and record whether that read answered under `key`. A refused read empties what
     /// it feeds; the view cannot tell that from an empty keystore unless it is told.
     bool read(const QString &key, const QString &reply, const QString &context);
+    /// `ok` for the signer manager, whose refusal names its own role.
+    bool okManager(const QString &reply, const QString &context);
     void publishReads();
     void loadAccounts();
     void loadGroups();

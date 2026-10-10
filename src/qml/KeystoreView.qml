@@ -41,9 +41,28 @@ Item {
         // the READ ONLY badge and its banner are for, and `ready` may still be false at the
         // instant we are dispatched, so gating on it would refuse a request that succeeded.
         function onIntentRequested(requestId, intent, params, requesterName) {
+            if (intent === "keystore.accounts.open") {
+                // An app's open or unlock request, by the manager's handle. Answered when the
+                // person decides; a handle the manager does not hold is a bad request.
+                root.intentByHandle[params.handle] = requestId
+                logos.watch(root.backend.showAccess(params.handle), function (opened) {
+                    if (opened) accessSheet.open()
+                    else root.answerIntent(params.handle, false, "bad_request")
+                })
+                return
+            }
             if (intent !== "evm.accounts.manage") return
             logos.respond(requestId, true, ({}), "")
         }
+    }
+
+    // Intents being serviced, keyed by the manager's handle each one named.
+    property var intentByHandle: ({})
+    function answerIntent(handle, ok, error) {
+        var id = root.intentByHandle[handle]
+        if (id === undefined) return
+        delete root.intentByHandle[handle]
+        logos.respond(id, ok, ({}), error)
     }
 
     function j(t, fb) { try { return JSON.parse(t && t.length ? t : fb) } catch (e) { return JSON.parse(fb) } }
@@ -56,6 +75,34 @@ Item {
     readonly property var walletNames: ready ? j(backend.walletNamesJson, "{}") : ({})
     readonly property bool custodian: ready && backend.isCustodian
     readonly property var identity: ready ? j(backend.identityJson, "{}") : ({})
+
+    // The signer manager, as its custodian: apps' open and unlock requests, what is unlocked,
+    // and which wallets are open for which apps.
+    readonly property bool managerCustodian: ready && backend.isManagerCustodian
+    readonly property var access: ready ? j(backend.accessJson, "[]") : []
+    readonly property var accessShown: ready ? j(backend.accessShownJson, "{}") : ({})
+    readonly property var unlocked: ready ? j(backend.unlockedJson, "[]") : []
+    readonly property var openWallets: ready ? j(backend.openJson, "[]") : []
+    readonly property var bitcoinWallets: root.groups.filter(function (g) { return !!g.family })
+        .map(function (g) {
+            return { id: g.id, name: root.walletNameOf(g.id) || g.id, family: g.family, chain: g.chain }
+        })
+    // What can be unlocked: every account by address, and every Bitcoin wallet by id.
+    readonly property var unlockable: root.accounts.map(function (a) {
+            var label = root.labels[String(a).toLowerCase()] || root.labels[a] || ""
+            return { id: String(a), name: label ? label + "  " + a : String(a) }
+        }).concat(root.bitcoinWallets.map(function (w) { return { id: w.id, name: w.name + " (Bitcoin)" } }))
+    function accountName(id) {
+        var hit = root.unlockable.filter(function (u) { return u.id.toLowerCase() === String(id).toLowerCase() })
+        return hit.length ? hit[0].name : String(id)
+    }
+    function termsLine(u) {
+        var when = u.expiresInMs === null || u.expiresInMs === undefined ? "until locked"
+                   : "for " + Math.max(1, Math.round(u.expiresInMs / 60000)) + " more min"
+        var count = u.countLeft === null || u.countLeft === undefined ? "no limit" : u.countLeft + " left"
+        var apps = (u.apps || []).length ? u.apps.join(", ") : "nobody"
+        return when + ", " + count + ", for " + apps + (u.confirm === false ? ", without asking" : ", confirmed")
+    }
 
     // What the key directory holds. Read from that directory alone, so this stays populated
     // when groups.json is unreadable and no wallet is listed — otherwise the key would be
@@ -351,6 +398,98 @@ Item {
             text: root.ready ? root.backend.lastError : ""
         }
 
+        // ── Apps' requests to the signer manager, decided here with the person ─────────
+        LogosText {
+            objectName: "notManagerCustodianNotice"
+            Layout.fillWidth: true
+            visible: root.ready && !root.managerCustodian
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: "This build is not the signer manager's custodian, so apps' requests to open or "
+                  + "unlock accounts are decided elsewhere."
+        }
+        ColumnLayout {
+            objectName: "accessRequests"
+            Layout.fillWidth: true
+            visible: root.access.length > 0
+            spacing: Theme.spacing.tiny
+            LogosText {
+                font.bold: true
+                text: root.access.length === 1 ? "1 request from an app" : root.access.length + " requests from apps"
+            }
+            Repeater {
+                model: root.access
+                delegate: LogosButton {
+                    objectName: "accessRequest_" + index
+                    Layout.fillWidth: true
+                    text: modelData.requester + (modelData.kind === "open" ? " asks to open a wallet"
+                                                                          : " asks to unlock an account")
+                    onClicked: logos.watch(root.backend.showAccess(modelData.handle),
+                                           function (ok) { if (ok) accessSheet.open() })
+                }
+            }
+        }
+        ColumnLayout {
+            objectName: "unlockedAccounts"
+            Layout.fillWidth: true
+            visible: root.unlocked.length > 0
+            spacing: Theme.spacing.tiny
+            RowLayout {
+                Layout.fillWidth: true
+                LogosText { text: "Unlocked"; font.bold: true }
+                Item { Layout.fillWidth: true }
+                LogosButton {
+                    objectName: "lockAllButton"
+                    text: "Lock all"
+                    onClicked: logos.watch(root.backend.lockAccount(""), function () {})
+                }
+            }
+            Repeater {
+                model: root.unlocked
+                delegate: RowLayout {
+                    Layout.fillWidth: true
+                    LogosText {
+                        objectName: "unlockedLine_" + index
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        text: root.accountName(modelData.account) + " — " + root.termsLine(modelData)
+                    }
+                    LogosButton {
+                        objectName: "lockButton_" + index
+                        text: "Lock"
+                        onClicked: logos.watch(root.backend.lockAccount(modelData.account), function () {})
+                    }
+                }
+            }
+        }
+        ColumnLayout {
+            objectName: "openWallets"
+            Layout.fillWidth: true
+            visible: root.openWallets.length > 0
+            spacing: Theme.spacing.tiny
+            LogosText { text: "Open in apps"; font.bold: true }
+            Repeater {
+                model: root.openWallets
+                delegate: RowLayout {
+                    Layout.fillWidth: true
+                    LogosText {
+                        objectName: "openLine_" + index
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        text: (root.walletNameOf(modelData.group) || modelData.group) + " — open for " + modelData.module
+                    }
+                    LogosButton {
+                        objectName: "closeButton_" + index
+                        text: "Close"
+                        onClicked: logos.watch(root.backend.closeWallet(modelData.module, modelData.group),
+                                               function () {})
+                    }
+                }
+            }
+        }
+
         // A refusal names itself. Every one of these reads empties what it feeds, and each of
         // those empty answers is also a truthful screen for some keystore — so the difference
         // has to be said outright rather than left to be inferred from what is missing.
@@ -403,6 +542,12 @@ Item {
             LogosButton { objectName: "importPhraseButton"; text: "Import phrase"; enabled: root.custodian; onClicked: phraseSheet.open() }
             LogosButton { objectName: "importKeyButton";    text: "Import key";    enabled: root.custodian; onClicked: keySheet.open() }
             LogosButton { objectName: "importVaultButton";  text: "Import vault";  enabled: root.custodian; onClicked: vaultSheet.open() }
+            LogosButton {
+                objectName: "unlockAccountButton"
+                text: "Unlock…"
+                enabled: root.managerCustodian && root.unlockable.length > 0
+                onClicked: unlockSheet.open()
+            }
         }
 
         Item {
@@ -494,6 +639,17 @@ Item {
 
     // ── Add an account to one wallet, and manage that wallet ───────────────────────
     AddAccountSheet { id: addSheet; backend: root.backend; view: root }
+
+    // ── An app's request, and the person's own unlock ──────────────────────────────
+    AccessSheet {
+        id: accessSheet
+        backend: root.backend
+        shown: root.accessShown
+        wallets: root.bitcoinWallets
+        onDecided: function (handle, approved) { root.answerIntent(handle, approved, approved ? "" : "rejected") }
+        onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
+    }
+    UnlockSheet { id: unlockSheet; backend: root.backend; accounts: root.unlockable }
     ManageWalletSheet {
         id: walletSheet
         backend: root.backend

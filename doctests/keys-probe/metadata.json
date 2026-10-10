@@ -1,0 +1,21 @@
+{
+  "name": "keys_probe",
+  "version": "1.0.0",
+  "description": "Doc-test fixture: an app that asks the signer manager to open a Bitcoin wallet and then to unlock it, and reports what it was handed. Also the keystore's custodian, to import the wallet.",
+  "author": "Logos Core Team",
+  "type": "core",
+  "interface": "cdylib",
+  "category": "test",
+  "main": "keys_probe_plugin",
+  "dependencies": ["keystore_module", "signer_manager_module"],
+  "include": [],
+  "capabilities": [],
+  "codegen": {
+    "rust": { "crate": "rust-lib", "trait": "KeysProbeModule", "source": "src/glue.rs" }
+  },
+  "nix": {
+    "external_libraries": [],
+    "packages": { "build": [], "runtime": [] },
+    "cmake": { "find_packages": [], "extra_include_dirs": [] }
+  }
+}

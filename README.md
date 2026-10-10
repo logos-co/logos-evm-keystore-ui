@@ -7,6 +7,13 @@ account picker; `evm_signer_ui` shows what is being signed and takes the passwor
 Neither can change the keystore, and that is enforced by the keystore itself — this module is
 its configured **custodian**, and Tier D admits nobody else.
 
+It is also the [signer manager](https://github.com/logos-co/logos-signer-manager-module)'s
+custodian. An app that wants a Bitcoin wallet asks the manager to **open** one, and an app that
+wants signatures without a password each time asks for an account to stay **unlocked**; the
+person decides both here, on their own terms, through the `keystore.accounts.open` intent or the
+requests listed at the top of the screen. The keys app also unlocks and locks accounts with
+nobody asking, and closes wallets opened for apps.
+
 ## Screens
 
 | Screen | Keystore method |
@@ -24,6 +31,9 @@ its configured **custodian**, and Tier D admits nobody else.
 | Export | `export_keystore_json` |
 | Delete a stranded derivation key | `list_derivation_keys` → `forget_derivation` |
 | Delete | `delete_account` |
+| Requests from apps *(open a wallet, unlock an account)* | the manager's `access_requests`, `acknowledge_access`, `approve_access`, `reject_access` |
+| Unlock… / Unlocked / Lock all | the manager's `unlock`, `unlocked`, `lock` |
+| Open in apps / Close | the manager's `open_accounts`, `close_account` |
 
 There is no plain "create account" button, and no way here to a key generated from randomness
 rather than derived from a phrase. `create_unrelated_account` stays on the keystore's contract —
@@ -238,7 +248,13 @@ defaults, and blaming the deployment for a torn file is a different bug to go lo
 python3 doctests/assert_ui.py --grep-only   # no app, no socket
 node doctests/tree_table.mjs                # the tree rules, as a table
 python3 doctests/assert_ui.py               # the rest, against an app on port 3768
+./doctests/run.sh                           # the e2e spec: an app's open and unlock, decided here
 ```
+
+`doctests/evm-keystore-ui-e2e.test.yaml` runs the keys app in a headless host beside the
+`keys_probe` fixture, which imports a regtest wallet, asks to open it and then to unlock it for
+two confirmed signatures. It drives the decisions over the QML inspector and checks what the
+fixture was handed: the descriptors, a 32-byte database key, and the terms the person granted.
 
 ## Building
 
