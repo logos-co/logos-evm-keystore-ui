@@ -16,7 +16,7 @@ LogosDialog {
     property var backend: null
     // `{ handle, requester, kind, bundle_id, lines, asked }`, from the manager.
     property var shown: ({})
-    // Bitcoin wallets the person may pick from: `[{ id, name, family, chain }]`.
+    // Bitcoin wallets the person may pick from: `[{ id, name, family, chain, device?, hasKey?, signer? }]`.
     property var wallets: []
 
     signal decided(string handle, bool approved)
@@ -36,6 +36,16 @@ LogosDialog {
         return w.family === sheet.asked.family && w.chain === sheet.chainOf(sheet.asked.network)
     })
     property string picked: ""
+    // The wallet this open names, or the one picked.
+    readonly property var target: {
+        var id = sheet.asked.group || sheet.picked
+        var hit = sheet.wallets.filter(function (w) { return w.id === id })
+        return hit.length ? hit[0] : null
+    }
+    // A device signs on its own screen: nothing to unlock, and its data has a password of its own.
+    readonly property bool onDevice: isOpen && !!(target && target.device)
+    readonly property bool firstOpen: onDevice && !target.hasKey
+    readonly property bool birthdayOk: birthday.text.trim() === "" || /^\d{4}-\d{2}-\d{2}$/.test(birthday.text.trim())
     function pickWallet(group) {
         picked = group
         for (var i = 0; i < walletRepeater.count; ++i)
@@ -48,6 +58,8 @@ LogosDialog {
     onOpened: {
         picked = ""
         pw.text = ""
+        pwAgain.text = ""
+        birthday.text = ""
         alsoUnlock.checked = !!(isOpen && asked.unlock)
         terms.load(isOpen ? asked.unlock : asked.terms)
         // An app that named no apps asks for itself.
@@ -107,8 +119,23 @@ LogosDialog {
         LogosCheckbox {
             id: alsoUnlock
             objectName: "accessAlsoUnlock"
-            visible: sheet.isOpen
+            visible: sheet.isOpen && !sheet.onDevice
             text: "Also unlock it"
+        }
+        LogosText {
+            objectName: "accessDeviceNote"
+            visible: sheet.onDevice
+            Layout.fillWidth: true
+            textFormat: Text.PlainText
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: sheet.onDevice
+                  ? "This wallet's key is on " + sheet.target.signer + ": it signs there, so there is nothing to unlock. "
+                    + (sheet.firstOpen
+                       ? "Set a password for its data: the app keeps the wallet's history encrypted with a key kept "
+                         + "here, behind it. Forget it, and the app reads the wallet's history again from the start."
+                       : "Type the password of its data, set the first time it was opened.")
+                  : ""
         }
 
         // ── the terms, for an unlock request or an open that unlocks too ───────────
@@ -116,7 +143,7 @@ LogosDialog {
             id: terms
             namePrefix: "access"
             Layout.fillWidth: true
-            visible: !sheet.isOpen || alsoUnlock.checked
+            visible: !sheet.isOpen || (alsoUnlock.checked && !sheet.onDevice)
         }
 
         LogosTextField {
@@ -124,8 +151,28 @@ LogosDialog {
             objectName: "accessPasswordField"
             Layout.fillWidth: true
             echoMode: TextInput.Password
-            placeholderText: sheet.isOpen ? "The wallet's password" : "The account's password"
+            placeholderText: !sheet.isOpen ? "The account's password"
+                             : sheet.firstOpen ? "Set a password for this wallet's data"
+                             : sheet.onDevice ? "This wallet's data password"
+                             : "The wallet's password"
             Component.onCompleted: textInput.passwordMaskDelay = 0
+        }
+        LogosTextField {
+            id: pwAgain
+            objectName: "accessPasswordAgainField"
+            visible: sheet.firstOpen
+            Layout.fillWidth: true
+            echoMode: TextInput.Password
+            placeholderText: "Type it again"
+            Component.onCompleted: textInput.passwordMaskDelay = 0
+        }
+        // A device keeps no record of when its seed was made; the person may know the day.
+        LogosTextField {
+            id: birthday
+            objectName: "accessBirthdayField"
+            visible: sheet.firstOpen
+            Layout.fillWidth: true
+            placeholderText: "First used on, as YYYY-MM-DD (optional)"
         }
 
         RowLayout {
@@ -157,14 +204,17 @@ LogosDialog {
                 text: sheet.isOpen ? "Open" : "Unlock"
                 enabled: pw.text.length > 0
                          && (!sheet.picks || sheet.picked !== "")
-                         && ((sheet.isOpen && !alsoUnlock.checked) || terms.complete)
+                         && (!sheet.firstOpen || (pwAgain.text === pw.text && sheet.birthdayOk))
+                         && ((sheet.isOpen && (!alsoUnlock.checked || sheet.onDevice)) || terms.complete)
                 onClicked: {
                     var h = sheet.shown.handle
-                    var unlock = (!sheet.isOpen || alsoUnlock.checked) ? JSON.stringify(terms.value) : ""
+                    var unlock = (!sheet.isOpen || (alsoUnlock.checked && !sheet.onDevice)) ? JSON.stringify(terms.value) : ""
+                    var day = sheet.firstOpen ? birthday.text.trim() : ""
                     logos.watch(sheet.backend.approveAccess(h, sheet.shown.bundle_id,
-                                                           sheet.picks ? sheet.picked : "", pw.text, unlock),
+                                                           sheet.picks ? sheet.picked : "", pw.text, unlock, day),
                                 function (ok) { if (ok) { sheet.decided(h, true); sheet.close() } })
                     pw.text = ""
+                    pwAgain.text = ""
                 }
             }
         }

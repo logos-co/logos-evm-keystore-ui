@@ -99,6 +99,17 @@ Item {
     readonly property var unlocked: ready ? j(backend.unlockedJson, "[]") : []
     readonly property var openWallets: ready ? j(backend.openJson, "[]") : []
     readonly property var deviceAccounts: ready ? j(backend.deviceAccountsJson, "[]") : []
+    readonly property var deviceWallets: ready ? j(backend.deviceWalletsJson, "[]") : []
+    function hasDeviceKey(signer, account) {
+        return root.deviceWallets.some(function (w) { return w.signer === signer && w.account === account })
+    }
+    // Bitcoin accounts on devices, for an app's open: the first open sets their data password.
+    readonly property var deviceBitcoinWallets: root.deviceAccounts.filter(function (a) {
+            return a.family === "bitcoin" || a.family === "bitcoin_taproot"
+        }).map(function (a) {
+            return { id: a.id, name: (a.label || a.id) + " — on " + a.signer, family: a.family, chain: a.chain,
+                     signer: a.signer, device: true, hasKey: root.hasDeviceKey(a.signer, a.id) }
+        })
     readonly property var bitcoinWallets: root.groups.filter(function (g) { return !!g.family })
         .map(function (g) {
             return { id: g.id, name: root.walletNameOf(g.id) || g.id, family: g.family, chain: g.chain }
@@ -533,13 +544,50 @@ Item {
             LogosText { text: "On devices"; font.bold: true }
             Repeater {
                 model: root.deviceAccounts
-                delegate: LogosText {
-                    objectName: "deviceLine_" + index
+                delegate: ColumnLayout {
+                    id: device
                     Layout.fillWidth: true
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    text: (modelData.label || modelData.id) + " — " + modelData.signer
-                          + (modelData.available ? ", connected" : ", not connected")
+                    readonly property bool hasKey: root.hasDeviceKey(modelData.signer, modelData.id)
+                    property bool confirming: false
+                    RowLayout {
+                        Layout.fillWidth: true
+                        LogosText {
+                            objectName: "deviceLine_" + index
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            textFormat: Text.PlainText
+                            elide: Text.ElideRight
+                            text: (modelData.label || modelData.id) + " — " + modelData.signer
+                                  + (modelData.available ? ", connected" : ", not connected")
+                                  + (device.hasKey ? ", data password set" : "")
+                        }
+                        LogosButton {
+                            objectName: "forgetDeviceKey_" + index
+                            visible: device.hasKey && !device.confirming
+                            text: "Forget data password…"
+                            onClicked: device.confirming = true
+                        }
+                    }
+                    // Forgetting is the way out of a forgotten password, and it costs the apps their records.
+                    LogosText {
+                        visible: device.confirming
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: Theme.palette.warning
+                        text: "Apps that keep this wallet's records can no longer read them, and read its history again. Its next open sets a new password."
+                    }
+                    RowLayout {
+                        visible: device.confirming
+                        LogosButton {
+                            objectName: "forgetDeviceKeyConfirm_" + index
+                            text: "Forget it"
+                            onClicked: {
+                                device.confirming = false
+                                logos.watch(root.backend.forgetDeviceWallet(modelData.signer, modelData.id), function () {})
+                            }
+                        }
+                        LogosButton { text: "Keep it"; onClicked: device.confirming = false }
+                    }
                 }
             }
         }
@@ -741,7 +789,7 @@ Item {
         id: accessSheet
         backend: root.backend
         shown: root.accessShown
-        wallets: root.bitcoinWallets
+        wallets: root.bitcoinWallets.concat(root.deviceBitcoinWallets)
         onDecided: function (handle, approved) { root.answerIntent(handle, approved, approved ? "" : "rejected") }
         onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
         onAddWallet: function (family, chain) {
