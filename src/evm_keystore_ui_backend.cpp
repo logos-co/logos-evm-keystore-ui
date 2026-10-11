@@ -231,10 +231,8 @@ void EvmKeystoreUiBackend::refreshAccess()
             devices.append(a);
     setDeviceAccountsJson(compact(devices));
     // Which of them have a database key here: the first open of one sets its password.
-    const QString wallets = modules().keystore_module.device_wallets();
-    setDeviceWalletsJson(read(QStringLiteral("wallets"), wallets, QStringLiteral("device wallets"))
-                             ? compact(parseObject(wallets).value(QStringLiteral("wallets")))
-                             : QStringLiteral("[]"));
+    setDeviceWalletsJson(compact(parseObject(modules().keystore_module.device_wallets())
+                                     .value(QStringLiteral("wallets")).toArray()));
 
     const QJsonObject id = parseObject(modules().signer_manager_module.caller_identity());
     const QString me = id.value(QStringLiteral("identity")).toString();
