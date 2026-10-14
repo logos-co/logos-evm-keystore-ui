@@ -80,8 +80,21 @@ def dialog_titles(src):
     return out
 
 def literal_choice(expr):
-    """A literal, or a ternary chain whose every result is one: only this file's own words."""
-    return re.fullmatch(r'(?:.+?\?\s*"[^"]*"\s*:\s*)*"[^"]*"', expr) is not None
+    """A literal, or a ternary chain whose every result is one: only this file's own words.
+    Walked by hand, one `?` at a time: a single regex for the chain backtracks exponentially."""
+    rest = expr.strip()
+    while not re.fullmatch(r'"[^"]*"', rest):
+        quoted, q = False, -1
+        for i, ch in enumerate(rest):
+            quoted ^= ch == '"'
+            if ch == "?" and not quoted:
+                q = i
+                break
+        branch = re.match(r'\s*"[^"]*"\s*:', rest[q + 1:]) if q >= 0 else None
+        if not branch:
+            return False
+        rest = rest[q + 1 + branch.end():].strip()
+    return True
 
 def combo_models(src):
     """The `model:` of every LogosComboBox, or "" where none is set within the item's head."""
