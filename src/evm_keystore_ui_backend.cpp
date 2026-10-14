@@ -1,5 +1,6 @@
 #include "evm_keystore_ui_backend.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -503,6 +504,12 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
     auto password = p.value(QStringLiteral("password")).toString();
     auto source = p.value(QStringLiteral("source")).toObject();
     const auto name = p.value(QStringLiteral("name")).toString().trimmed();
+    // A restored Bitcoin wallet's first day, if the person gave one. A created one starts today,
+    // and so do its accounts read back from the vault it was just kept in, which the keystore
+    // calls restored: a kept phrase is older than the wallet, except this once.
+    const bool created = p.value(QStringLiteral("origin")).toString() == QStringLiteral("created");
+    const auto birthday = created ? QDateTime::currentDateTimeUtc().date().toString(Qt::ISODate)
+                                  : p.value(QStringLiteral("birthday")).toString().trimmed();
     QJsonArray saved;
     QJsonArray groups;
     QString keptId = source.value(QStringLiteral("keptPhrase")).toString();
@@ -548,11 +555,15 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         request["family"] = row.value("family"); request["chain"] = row.value("chain");
         request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
         request["accountIndex"] = row.value("index");
-        request["origin"] = p.value("origin");
+        const bool bitcoin = row.value("family").toString() != "evm";
+        const bool fromVault = created && source.contains(QStringLiteral("keptPhrase"));
+        request["origin"] = created && !fromVault ? QStringLiteral("created") : QStringLiteral("restored");
+        if (bitcoin && (!created || fromVault) && !birthday.isEmpty())
+            request["birthday"] = birthday;
         if (keep && keptId.isEmpty()) request["keepPhrase"] = QJsonObject{{"password", password}};
         auto body = params(request);
-        const auto reply = row.value("family").toString() == "evm"
-            ? modules().keystore_module.import_mnemonic(body) : modules().keystore_module.import_bitcoin(body);
+        const auto reply = bitcoin ? modules().keystore_module.import_bitcoin(body)
+                                   : modules().keystore_module.import_mnemonic(body);
         body.fill(QChar(0)); request = {};
         if (!ok(reply, QStringLiteral("save account"))) break;
         saved.append(row.value("key"));

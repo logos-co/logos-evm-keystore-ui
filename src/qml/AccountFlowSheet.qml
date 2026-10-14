@@ -38,6 +38,10 @@ LogosDialog {
     signal saved(var groups)
     readonly property string family: coin.currentIndex === 0 ? "evm" : scriptType.currentIndex === 0 ? "bitcoin" : "bitcoin_taproot"
     readonly property string chain: testnet.checked ? "test" : "main"
+    // A restored Bitcoin wallet may say when it was first used; a created one starts today.
+    readonly property bool asksBirthday: mode !== "create" && selected.some(function(r) { return r.family !== "evm" })
+    // The keystore checks it is a real day; here, only its shape.
+    readonly property bool birthdayOk: !asksBirthday || birthday.text.trim() === "" || /^\d{4}-\d{2}-\d{2}$/.test(birthday.text.trim())
     function clearSecrets() { words.text = ""; phrasePw.text = ""; passphrase.text = ""; password.text = ""; repeatPassword.text = ""; confirmWords.text = ""; generated = "" }
     function generatePhrase() {
         if (working) return
@@ -83,7 +87,8 @@ LogosDialog {
     function saveSelection() {
         notice = ""; working = true
         var p = { source: source(), selected: selected, name: groupName.text.trim(), password: password.text,
-                  keepRecovery: keep.checked && !keptId, origin: mode === "create" ? "created" : "restored" }
+                  keepRecovery: keep.checked && !keptId, origin: mode === "create" ? "created" : "restored",
+                  birthday: asksBirthday ? birthday.text.trim() : "" }
         logos.watch(backend.saveAccounts(JSON.stringify(p)), function(reply) {
             working = false
             var r
@@ -101,7 +106,7 @@ LogosDialog {
         clearSecrets(); rows = []; selected = []; page = 0; notice = ""; working = false
         step = mode === "import" || mode === "request" ? -1 : 0
         coin.currentIndex = presetFamily ? 1 : 0; scriptType.currentIndex = presetFamily === "bitcoin_taproot" ? 1 : 0; testnet.checked = presetChain === "test"
-        evmAccount.text = "0"; groupName.text = ""; keep.checked = false; advanced.checked = false
+        evmAccount.text = "0"; groupName.text = ""; birthday.text = ""; keep.checked = false; advanced.checked = false
         hasPassphrase.checked = needsPassphrase; showGenerated = true
         wordCountPicker.currentIndex = 0
         if (mode === "create") generatePhrase()
@@ -322,6 +327,18 @@ LogosDialog {
                         LogosCheckbox { id: keep; objectName: "flowKeepRecovery"; text: "Keep an encrypted recovery source" }
                         LogosInfoButton { objectName: "recoverySourceInfo"; title: "Keeping a recovery source"; Accessible.name: "Help: Keeping a recovery source"; text: "Account files hold only the keys needed for the selected accounts. The optional recovery source is a separate encrypted file that can derive more accounts from the same phrase. It uses the new files password when saved. Keep your own recovery backup even if you enable this option; a BIP39 passphrase is not saved here." }
                     }
+                    LogosTextField {
+                        id: birthday; objectName: "flowBirthday"; Layout.fillWidth: true
+                        visible: sheet.asksBirthday; placeholderText: "Bitcoin wallet first used on, as YYYY-MM-DD (optional)"
+                    }
+                    LogosText {
+                        objectName: "flowBirthdayHint"; visible: sheet.asksBirthday
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        color: sheet.birthdayOk ? Theme.palette.textSecondary : Theme.palette.warning
+                        text: sheet.birthdayOk
+                              ? "Apps look for this wallet's coins from this day on. A day after its first use hides older coins; if unsure, leave it empty and they look from the beginning, which takes longer."
+                              : "Write the day as YYYY-MM-DD, such as 2021-11-14."
+                    }
                     LogosText {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
                         text: sheet.keptId ? "The existing encrypted recovery source will be reused. Its password stays unchanged."
@@ -357,6 +374,7 @@ LogosDialog {
             LogosButton {
                 objectName: "flowSave"; visible: sheet.step === 2; text: sheet.working ? "Saving…" : "Save " + sheet.selected.length + " account(s)"
                 enabled: !sheet.working && sheet.selected.length > 0 && password.text.length > 0 && password.text === repeatPassword.text
+                         && sheet.birthdayOk
                 onClicked: sheet.saveSelection()
             }
         }

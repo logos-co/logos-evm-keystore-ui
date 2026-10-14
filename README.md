@@ -29,6 +29,9 @@ account is independently encrypted as a standard Web3 V3 JSON file. Bitcoin reta
 encrypted account-key/descriptor format, including both receive and change branches. The optional
 **Keep an encrypted recovery source** writes one separate phrase vault under the same password,
 reused by all selected accounts. A BIP39 passphrase remains separate and is never retained.
+Bitcoin accounts record where their history starts, so apps know where to look for their coins:
+a created phrase starts the day it is made, and a restored one on the day the person gives, which
+Save files asks for as an optional `YYYY-MM-DD`.
 
 **Add accounts…** on a recovery group verifies the saved or re-entered phrase against that group
 before previewing. Existing files, paths, passwords, and legacy derivation keys remain usable.
