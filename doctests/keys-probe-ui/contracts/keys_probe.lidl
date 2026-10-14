@@ -1,0 +1,7 @@
+module keys_probe {
+  version "1.0.0"
+  depends []
+
+  method status() -> tstr description "What the probe has got so far: `{ ok, state, handle? }`. Ungated: a fixture holding nothing secret."
+  method ask_new_wallet() -> tstr description "Ask to open a regtest taproot wallet, which the person creates; answers at once. Ungated."
+}

@@ -24,16 +24,10 @@ LogosFrame {
     // [{ name, text, color }] — header badges, in the order given.
     property var badges: []
     property var addresses: []
+    property var bitcoinGroup: null
     // The account level the header carries, -1 for none. A child recorded at another level
     // shows its whole path rather than borrowing this one.
     property int prefix: -1
-    // Whether this node's rows carry the leftmost ordinal column at all. Per node, never per
-    // row: a column that appears on some rows and not others is the ragged edge itself.
-    property bool ordinals: false
-    // One width for the whole node, from the widest thing the column can hold, so the
-    // addresses beside it line up whatever each row's ordinal turns out to be.
-    readonly property int ordinalWidth:
-        Math.ceil(ordinalMetric.width) + 2 * Theme.spacing.small + 2
     // Shown in place of the children when a node genuinely holds none. `unreadLine` is the
     // other case, and they are two properties because they are two different sentences: one
     // reports the wallet, the other reports the read.
@@ -61,19 +55,6 @@ LogosFrame {
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.tiny
-
-        // LogosBadge's own label font, so the reserved width matches what a badge renders.
-        // The family is half of that: its label is a LogosText, i.e. Public Sans, and
-        // measuring in the default face under-reserves by more than the slack allows.
-        TextMetrics {
-            id: ordinalMetric
-            font.family: Theme.typography.publicSans
-            font.pixelSize: 11
-            font.letterSpacing: 0.22
-            font.capitalization: Font.AllUppercase
-            font.weight: Theme.typography.weightMedium
-            text: "CHANGE #88"
-        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -193,11 +174,42 @@ LogosFrame {
         LogosText {
             objectName: "nodeEmpty_" + node.nodeId
             Layout.fillWidth: true
-            visible: node.expanded && node.emptyLine.length > 0 && node.addresses.length === 0
+            visible: node.expanded && node.emptyLine.length > 0 && node.addresses.length === 0 && !node.bitcoinGroup
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.secondaryText
             color: Theme.palette.textSecondary
             text: node.emptyLine
+        }
+
+        ColumnLayout {
+            visible: node.expanded && node.bitcoinGroup !== null
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spacing.large + Theme.spacing.xlarge
+            spacing: Theme.spacing.tiny
+            LogosText {
+                objectName: "bitcoinPath_" + node.nodeId
+                textFormat: Text.PlainText
+                color: Theme.palette.textSecondary
+                text: "Derivation path: " + ((node.bitcoinGroup || {}).pathPrefix || "Not recorded")
+            }
+            RowLayout {
+                readonly property var preview: (node.bitcoinGroup || {}).preview || ({})
+                LogosText {
+                    text: (node.bitcoinGroup || {}).chain === "test" ? "First receiving address (testnet/signet, 0/0):" : "First receiving address (0/0):"
+                    color: Theme.palette.textSecondary
+                }
+                LogosCopyableText {
+                    objectName: "bitcoinAddress_" + node.nodeId
+                    visible: !!parent.preview.address
+                    text: node.view.shortAddr(parent.preview.address)
+                    copyText: parent.preview.address || ""
+                }
+                LogosText {
+                    visible: !parent.preview.address
+                    text: "Address unavailable"
+                    color: Theme.palette.textSecondary
+                }
+            }
         }
 
         Repeater {
@@ -208,71 +220,38 @@ LogosFrame {
                 spacing: Theme.spacing.small
 
                 readonly property var badge: node.view.badgeFor(modelData, node.prefix)
-                // Empty unless this badge abbreviates a path. It is what decides whether the
-                // badge is hoverable at all, so a badge with nothing to complete says nothing.
-                readonly property string pathTip: node.view.pathTipFor(modelData, node.prefix)
-                readonly property string ordinal: node.view.ordinalFor(modelData, node.prefix)
 
-                // The ordinal, leftmost and right-aligned. The slot keeps its width when a row
-                // has no ordinal, so the column beside it stays straight.
-                Item {
-                    visible: node.ordinals
-                    Layout.preferredWidth: node.ordinalWidth
-                    Layout.preferredHeight: ordinalBadge.implicitHeight
-                    LogosBadge {
-                        id: ordinalBadge
-                        objectName: "index_" + modelData
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: ordinal.length > 0
-                        text: ordinal
-                        color: node.view.badgeColor(badge.kind)
-                        // One hover away — this is the column that DROPS the levels its header
-                        // carries, and the only one with anything left to complete.
-                        HoverHandler { id: pathHover; enabled: pathTip.length > 0 }
-                        LogosToolTip {
-                            placement: 1
-                            visible: pathHover.hovered && pathTip.length > 0
-                            text: pathTip
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacing.tiny
+                    LogosText {
+                        objectName: "accountName_" + modelData
+                        visible: text.length > 0
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        text: node.view.labelFor(modelData)
+                    }
+                    LogosText {
+                        objectName: "path_" + modelData
+                        textFormat: Text.PlainText
+                        color: Theme.palette.textSecondary
+                        text: "Derivation path: " + (node.view.hdPath((node.view.provFor(modelData) || {}).path) || "Not recorded")
+                    }
+                    RowLayout {
+                        LogosText { text: "Address:"; color: Theme.palette.textSecondary }
+                        LogosCopyableText {
+                            objectName: "account_" + modelData
+                            text: node.view.shortAddr(modelData)
+                            copyText: modelData
                         }
                     }
-                }
-
-                // Two items, because they are two strings: the name is user-typed and elides,
-                // the address is a fixed 13 characters and is the one worth copying.
-                LogosText {
-                    objectName: "accountName_" + modelData
-                    visible: text.length > 0
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    Layout.maximumWidth: node.width / 3
-                    text: node.view.labelFor(modelData)
-                }
-                LogosCopyableText {
-                    objectName: "account_" + modelData
-                    // Nothing to elide, which matters: LogosSelectableText clips instead. The
-                    // whole address is what the button writes, not the shortened one shown.
-                    text: node.view.shortAddr(modelData)
-                    copyText: modelData
-                }
-                LogosBadge {
-                    objectName: "provenance_" + modelData
-                    // How an account ARRIVED. Where it sits within a wallet moved to the
-                    // ordinal column, and nothing else was ever badged here.
-                    visible: badge.kind === "imported"
-                    text: badge.text
-                    color: node.view.badgeColor(badge.kind)
-                }
-                // A wallet with no recorded prefix has nothing to complete, so its children
-                // carry the whole path. Not a badge: badges uppercase, and `m` is meaningful.
-                LogosText {
-                    objectName: "path_" + modelData
-                    visible: badge.kind === "path"
-                    textFormat: Text.PlainText
-                    font.family: Theme.typography.mono
-                    font.pixelSize: Theme.typography.secondaryText
-                    color: Theme.palette.textSecondary
-                    text: badge.text
+                    LogosBadge {
+                        objectName: "provenance_" + modelData
+                        visible: badge.kind === "imported"
+                        text: badge.text
+                        color: node.view.badgeColor(badge.kind)
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 LogosButton {

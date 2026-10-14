@@ -15,10 +15,10 @@ Sections 1 and up drive a live app over the QML inspector on port 3768 and are R
 they open sheets and toggle a disclosure, and press no confirm button. Port 3768 is also
 Basecamp's inspector port. Only ever point this at a fixture app you started yourself.
 
-Run against a `logos-standalone-app` started with QT_QPA_PLATFORM=offscreen and
-QML_INSPECTOR_PORT=3768, with keystore_module and evm_keystore_ui staged as the -dev variant, and a
-keystore holding at least two derivable wallets — the whole subject of this screen is two
-wallets whose first accounts sit at the same path.
+Run against Basecamp's standalone mode (`#app-standalone`) started with
+QT_QPA_PLATFORM=offscreen and QML_INSPECTOR_PORT=3768, with `--module` this repo's #install,
+keystore_module in `--modules-dir`, and a keystore holding at least two derivable wallets — the
+whole subject of this screen is two wallets whose first accounts sit at the same path.
 
 A source assertion here names the SITE it is about, never a region: asking whether
 `Text.PlainText` appears anywhere in a 600-line file is answered by the first item that sets
@@ -79,6 +79,37 @@ def dialog_titles(src):
                 break
     return out
 
+def literal_choice(expr):
+    """A literal, or a ternary chain whose every result is one: only this file's own words.
+    Walked by hand, one `?` at a time: a single regex for the chain backtracks exponentially."""
+    rest = expr.strip()
+    while not re.fullmatch(r'"[^"]*"', rest):
+        quoted, q = False, -1
+        for i, ch in enumerate(rest):
+            quoted ^= ch == '"'
+            if ch == "?" and not quoted:
+                q = i
+                break
+        branch = re.match(r'\s*"[^"]*"\s*:', rest[q + 1:]) if q >= 0 else None
+        if not branch:
+            return False
+        rest = rest[q + 1 + branch.end():].strip()
+    return True
+
+def combo_models(src):
+    """The `model:` of every LogosComboBox, or "" where none is set within the item's head."""
+    out, lines = [], code(src).splitlines()
+    for i, line in enumerate(lines):
+        if re.search(r"\bLogosComboBox\s*\{", line):
+            found = [re.search(r"\bmodel:\s*(.+?)\s*$", l) for l in lines[i:i + 8]]
+            out.append(next((m.group(1) for m in found if m), ""))
+    return out
+
+def in_order(src, *anchors):
+    """Whether every anchor is present and each comes after the one before it."""
+    at = [src.find(a) for a in anchors]
+    return all(i >= 0 for i in at) and at == sorted(at)
+
 
 # ── 0) no app, no socket ───────────────────────────────────────────────────────────
 print("0) Theme tokens — Theme.palette is a var, so a wrong name is invisible until load")
@@ -133,9 +164,15 @@ print("0a) a wallet's NAME is the first user-typed string this view shows")
 # LogosBadge, LogosComboBox, LogosItemDelegate, LogosGroupBox and LogosDialog's title all
 # render through a bare LogosText, i.e. Qt AutoText. A name must reach none of them.
 titles = [t for f in QML.glob("*.qml") for t in dialog_titles(f.read_text())]
-check("every dialog title is a literal", [t for t in titles if not t.startswith('"')], [])
-check("no LogosComboBox anywhere",
-      [f.name for f in QML.glob("*.qml") if "LogosComboBox" in code(f.read_text())], [])
+check("every dialog title is a literal, or a choice between literals",
+      [t for t in titles if not literal_choice(t)], [])
+# A combo may list this file's own words, or ids the keystore mints (`p_` + hex), never a name.
+combos = [(f.name, m) for f in QML.glob("*.qml") for m in combo_models(f.read_text())]
+check("no LogosComboBox lists a string anyone typed",
+      [c for c in combos
+       if not re.fullmatch(r'\[\s*"[^"]*"(?:\s*,\s*"[^"]*")*\s*\]', c[1])
+       and not re.fullmatch(r'[\w.]+\.map\(function\((\w+)\)\s*\{\s*return \1\.id\s*\}\)', c[1])],
+      [])
 check("no LogosItemDelegate or LogosGroupBox",
       [f.name for f in QML.glob("*.qml")
        if re.search(r"LogosItemDelegate|LogosGroupBox", code(f.read_text()))], [])
@@ -253,13 +290,10 @@ print("0b1) a tooltip may only assert a path where there IS one")
 # account has a path AND that it is broken; an imported key has path "" by construction.
 check("the sentence that invented a path is gone", "an unrecognised path" in ALL, False)
 check("and so is the function that produced it", "fullPathOf" in ALL, False)
-check("the tip is decided in tree.js, where a table runs it",
-      "function pathTipOf" in (QML / "tree.js").read_text(), True)
-# Anchored on the ORDINAL now: the badges that abbreviate a path are the only ones that
-# moved into the leftmost column, and it is the only item left with a tip to show.
-tip = block(code(node), 'objectName: "index_" + modelData', 12)
-check("the hover is gated on there being a path", "enabled: pathTip.length > 0" in tip, True)
-check("and so is the tooltip", "visible: pathHover.hovered && pathTip.length > 0" in tip, True)
+# The tip left with the ordinal column: a row now states its whole path, so nothing on it
+# completes one on hover.
+check("no row offers a path on hover",
+      re.search(r"\b(LogosToolTip|HoverHandler)\b", code(node)) is None, True)
 check("and the badge it left behind offers none at all",
       "pathHover" in block(code(node), 'objectName: "provenance_" + modelData', 8), False)
 # Every other sentence on this screen that names a path: each must test the parse first.
@@ -378,46 +412,26 @@ check("the notice explains no state the keystore can no longer be in",
 check("and it names the modules that do hold the role, read from the keystore",
       "root.identity.custodians" in block(view, 'objectName: "notCustodianNotice"', 12), True)
 
-print("0k) the ordinal is the leftmost column, and a row without one is not ragged")
-# It sat after the address, so `#0` read as a property of that row rather than as its position
-# among the wallet's accounts. Leftmost makes it a column — and a column present on some rows
-# and absent on others IS the ragged edge, so its presence is decided per NODE, not per row.
-check("the ordinal is its own item", 'objectName: "index_" + modelData' in code(node), True)
-check("and it comes first in the row",
-      code(node).index('objectName: "index_"')
-      < code(node).index('objectName: "account_" + modelData'), True)
-check("the column is a node-level decision",
-      "property bool ordinals" in code(node)
-      and "ordinals: Tree.showsOrdinals(modelData)" in code(view), True)
-check("decided in tree.js, where a table runs it",
-      all(("function " + f) in (QML / "tree.js").read_text()
-          for f in ("showsOrdinals", "ordinalOf")), True)
-check("the slot keeps its width where a row has no ordinal",
-      "Layout.preferredWidth: node.ordinalWidth" in code(node), True)
-width = block(code(node), "readonly property int ordinalWidth", 3)
-check("and nothing in that width depends on the row", "modelData" in width, False)
-# Measured from the widest thing the column can hold, not guessed: a constant here is how the
-# reserved slot silently becomes no slot at all.
-check("it is measured, not asserted", "ordinalMetric.width" in width, True)
-# …and measured in the badge's OWN font. LogosBadge's label is a LogosText, i.e. Public Sans;
-# every other font property was matched and the family was not, so a long badge under-reserved
-# by more than the slack and bled left out of its slot.
-metric = block(code(node), "TextMetrics {", 8)
-for prop in ("font.family: Theme.typography.publicSans", "font.pixelSize: 11",
-             "font.letterSpacing: 0.22", "font.capitalization: Font.AllUppercase",
-             "font.weight: Theme.typography.weightMedium"):
-    check("  in the badge's own " + prop.split(":")[0].strip(), prop in metric, True)
-# An em-dash would be a glyph the data does not contain; those rows say what they are
-# elsewhere in the row — the whole path, or their node's own header sentence.
-check("the badge inside the slot shows only where there IS an ordinal",
-      "visible: ordinal.length > 0" in code(node), True)
-check("and nothing stands in for one where there is not",
-      re.search(r'"\s*[\u2014\u2013-]\s*"', code(node)) is None, True)
-ordinal = block(code(node), 'objectName: "index_" + modelData', 12)
-check("the hover that completes a path moved with it",
-      "enabled: pathTip.length > 0" in ordinal, True)
-check("and so did its tooltip",
-      "visible: pathHover.hovered && pathTip.length > 0" in ordinal, True)
+print("0k) a row states its whole path, so none abbreviates one and none is ragged")
+# The ordinal column and its hover are gone: grouped under its recovery source, each row says
+# its name, its path and its address, in that order.
+check("the ordinal column is gone", 'objectName: "index_"' in code(node), False)
+check("and so is the code that sized and filled it", "ordinal" in code(node), False)
+treejs = code((QML / "tree.js").read_text())
+check("nothing computes an ordinal or a path tip for a row any more",
+      [f for f in ("ordinalFor", "pathTipFor", "showsOrdinals", "ordinalOf", "pathTipOf")
+       if f in code(view) or f in treejs], [])
+check("the path is its own item", 'objectName: "path_" + modelData' in code(node), True)
+path = block(code(node), 'objectName: "path_" + modelData', 5)
+check("on every row, not only some", "visible:" in path, False)
+check("and it is PlainText", "textFormat: Text.PlainText" in path, True)
+check("rebuilt by hdPath, which answers nothing rather than a failure word",
+      "node.view.hdPath(" in path, True)
+check("a Bitcoin wallet's recorded path is PlainText too",
+      "textFormat: Text.PlainText" in block(code(node), 'objectName: "bitcoinPath_"', 4), True)
+check("name, then path, then address",
+      in_order(code(node), 'objectName: "accountName_" + modelData',
+               'objectName: "path_" + modelData', 'objectName: "account_" + modelData'), True)
 check("what is left beside the address is only how the account ARRIVED",
       'visible: badge.kind === "imported"'
       in block(code(node), 'objectName: "provenance_" + modelData', 8), True)
@@ -658,19 +672,7 @@ print("7) creating a key from randomness is not reachable from this screen")
 check("no toolbar action", oid("unrelatedKeyButton") is None, True)
 check("and no sheet behind it", oid("unrelatedAccountSheet") is None, True)
 
-print("8) a badge only offers a path where it abbreviates one")
-# How the defect was measured: hovering PRIVATE KEY answered "an unrecognised path". Asked of
-# the real keystore, of every badge on screen, rather than of a fixture.
-tips = js("JSON.stringify(nodes.reduce(function(acc,n){return acc.concat("
-          "n.addresses.map(function(a){return [badgeFor(a,n.prefix).kind,"
-          "pathTipFor(a,n.prefix)]}))},[]))") or []
-print(f"    badge kinds: {sorted(set(k for k, _ in tips))}")
-check("nothing but #n and CHANGE #n completes into a path",
-      [k for k, t in tips if t and k not in ("index", "change")], [])
-check("and those that do complete into one this view rebuilt",
-      [t for k, t in tips if k in ("index", "change") and not re.fullmatch(r"m/44'/60'/\d+'/\d+/\d+", str(t))], [])
-
-print("9) a refused read is named, and no frame claims a count it did not read")
+print("8) a refused read is named, and no frame claims a count it did not read")
 refused = js("JSON.stringify(refusedReads)") or []
 print(f"    refused: {refused}")
 check("the notice is shown exactly when something was refused",
@@ -681,24 +683,18 @@ check("a frame whose count was not read says so, and says nothing else",
       [i for i in unknown if (props(f"nodeEmpty_{i}").get("text") or "")
        or not (props(f"nodeUnread_{i}").get("text") or "")], [])
 
-print("10) the ordinal column is per node, and every row of a node agrees with it")
-cols = js("JSON.stringify(nodes.map(function(n){return {kind:n.kind,col:n.prefix>=0,"
-          "ords:n.addresses.map(function(a){return ordinalFor(a,n.prefix)})}}))") or []
-print(f"    columns: {[(c['kind'], c['col']) for c in cols]}")
-check("only a wallet node carries the column",
-      [c["kind"] for c in cols if c["col"] and c["kind"] != "wallet"], [])
-check("and no node without it has a row that would fill one",
-      [c["kind"] for c in cols if not c["col"] and [o for o in c["ords"] if o]], [])
-check("what the column says is a position, never a path",
-      [o for c in cols for o in c["ords"] if "/" in str(o)], [])
+print("9) a row states its whole path, not an ordinal")
 if wallets and wallets[0]["n"] > 0:
     one = js(f"JSON.stringify(nodes.filter(function(n){{return n.id==='{wallets[0]['id']}'}})"
              "[0].addresses[0])")
-    check("the ordinal is its own item on the row", oid(f"index_{one}") is not None, True)
+    check("the row states its whole path, not an ordinal",
+          (oid(f"index_{one}") is None,
+           bool(re.search(r"m/44'/60'/\d+'/\d+/\d+", props(f"path_{one}").get("text") or ""))),
+          (True, True))
     check("and the address beside it is the copyable control",
           props(f"account_{one}").get("copyText"), one)
 
-print("11) removing a wallet is offered only where the view can show it holds nothing")
+print("10) removing a wallet is offered only where the view can show it holds nothing")
 offered = js("JSON.stringify(nodes.filter(function(n){return walletRemovable(n)})"
              ".map(function(n){return [n.id, n.addresses.length, n.countKnown]}))") or []
 print(f"    removable: {offered}")
