@@ -356,5 +356,19 @@ check("without the frame it has no title at all",
 // wallet's: renaming what is on screen must not renumber the wallets above it.
 check("it takes the last ordinal", T.walletFrameIds(groups, [G1], [LEFT]).slice(-1), [LEFT]);
 
+console.log("16) wallets from the same seed share a parent across chains");
+const seedNodes = [
+  {kind: "wallet", id: "eth", group: {seedId: "seed1", family: null}},
+  {kind: "wallet", id: "legacy", group: {}},
+  {kind: "wallet", id: "btc", group: {seedId: "seed1", family: "bitcoin"}},
+  {kind: "wallet", id: "other", group: {seedId: "seed2"}},
+  {kind: "loose", id: "key"}
+];
+check("group across families without merging unknown or different seeds",
+  T.seedGroupsOf(seedNodes).map(g => [g.seed, !!g.linked, g.nodes.map(n => n.id)]),
+  [[true, true, ["eth", "btc"]], [true, false, ["legacy"]],
+   [true, true, ["other"]], [false, false, ["key"]]]);
+check("empty keystores have no seed groups", T.seedGroupsOf([]), []);
+
 console.log(failed ? `\n${failed} FAILED` : "\nall passed");
 process.exit(failed ? 1 : 0);

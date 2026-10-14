@@ -4,6 +4,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTimer>
+#include <QSet>
+#include <QFile>
+#include <QUrl>
 
 // The generated umbrella carrying `struct LogosModules`.
 #include "logos_sdk.h"
@@ -481,6 +484,90 @@ bool EvmKeystoreUiBackend::importMnemonicWith(QJsonObject p, QString accountPass
     return good;
 }
 
+QString EvmKeystoreUiBackend::previewSource(QString paramsJson)
+{
+    setLastError(QString());
+    const auto reply = modules().keystore_module.preview_mnemonic(paramsJson);
+    paramsJson.fill(QChar(0));
+    if (!ok(reply, QStringLiteral("preview"))) return {};
+    return compact(parseObject(reply).value(QStringLiteral("addresses")));
+}
+
+QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
+{
+    setLastError(QString());
+    auto p = parseObject(paramsJson);
+    paramsJson.fill(QChar(0));
+    const auto rows = p.take(QStringLiteral("selected")).toArray();
+    const bool keep = p.take(QStringLiteral("keepRecovery")).toBool();
+    auto password = p.value(QStringLiteral("password")).toString();
+    auto source = p.value(QStringLiteral("source")).toObject();
+    const auto name = p.value(QStringLiteral("name")).toString().trimmed();
+    QJsonArray saved;
+    QJsonArray groups;
+    QString keptId = source.value(QStringLiteral("keptPhrase")).toString();
+    auto result = [&]() {
+        password.fill(QChar(0)); source = {}; p = {};
+        const auto error = lastError();
+        refresh();
+        if (!error.isEmpty()) say(error);
+        return compact(QJsonObject{{"saved", saved}, {"groups", groups}, {"keptPhrase", keptId}, {"error", error}});
+    };
+    if (rows.isEmpty() || rows.size() > 20 || password.isEmpty()) {
+        say(QStringLiteral("Choose 1–20 accounts and a password for the new files."));
+        return result();
+    }
+    // Validate the entire selection before writing. In particular, existing files must
+    // never be overwritten or re-encrypted just because the same phrase was imported.
+    QSet<QString> seen;
+    for (const auto &value : rows) {
+        const auto row = value.toObject();
+        const auto key = row.value("key").toString();
+        auto request = source;
+        request["family"] = row.value("family"); request["chain"] = row.value("chain");
+        request["account"] = row.value("account"); request["from"] = row.value("index"); request["count"] = 1;
+        auto body = params(request);
+        const auto reply = modules().keystore_module.preview_mnemonic(body);
+        body.fill(QChar(0)); request = {};
+        if (!ok(reply, QStringLiteral("check selection"))) return result();
+        const auto checked = parseObject(reply).value("addresses").toArray();
+        if (checked.size() != 1 || checked.first().toObject().value("address") != row.value("address")
+            || checked.first().toObject().value("path") != row.value("path")
+            || checked.first().toObject().value("present").toBool() || key.isEmpty() || seen.contains(key)) {
+            say(QStringLiteral("An account is already saved or the selection changed. Return to Choose accounts and refresh it."));
+            return result();
+        }
+        seen.insert(key);
+    }
+    for (const auto &value : rows) {
+        const auto row = value.toObject();
+        auto request = source;
+        request["password"] = password;
+        request["storage"] = "plain";
+        request["groupLabel"] = name; request["label"] = name;
+        request["family"] = row.value("family"); request["chain"] = row.value("chain");
+        request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
+        request["accountIndex"] = row.value("index");
+        request["origin"] = p.value("origin");
+        if (keep && keptId.isEmpty()) request["keepPhrase"] = QJsonObject{{"password", password}};
+        auto body = params(request);
+        const auto reply = row.value("family").toString() == "evm"
+            ? modules().keystore_module.import_mnemonic(body) : modules().keystore_module.import_bitcoin(body);
+        body.fill(QChar(0)); request = {};
+        if (!ok(reply, QStringLiteral("save account"))) break;
+        saved.append(row.value("key"));
+        const auto group = parseObject(reply).value("group").toString();
+        if (!group.isEmpty()) groups.append(group);
+        if (keep && keptId.isEmpty()) {
+            keptId = parseObject(reply).value("phrase").toString();
+            if (!keptId.isEmpty()) {
+                source.remove("phrase"); source["keptPhrase"] = keptId; source["phrasePassword"] = password;
+            }
+        }
+    }
+    return result();
+}
+
 bool EvmKeystoreUiBackend::importMnemonic(QString phrase, QString bip39Passphrase,
                                           QString accountPassword, QString groupPassword,
                                           bool derivable, QString groupLabel, QString keepPhrasePassword)
@@ -527,6 +614,22 @@ bool EvmKeystoreUiBackend::importVaultJson(QString vaultJson, QString oldPasswor
         QString());
     if (good)
         refresh();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::importVaultFile(QString fileUrl, QString oldPassword, QString newPassword)
+{
+    setLastError(QString());
+    const QUrl url(fileUrl);
+    QFile file(url.toLocalFile());
+    if (!url.isLocalFile() || !file.open(QIODevice::ReadOnly) || file.size() > 1024 * 1024) {
+        say(QStringLiteral("Choose a readable local keystore JSON file smaller than 1 MB."));
+        return false;
+    }
+    auto data = file.read(1024 * 1024 + 1);
+    if (data.size() > 1024 * 1024) return false;
+    const bool good = importVaultJson(QString::fromUtf8(data), oldPassword, newPassword);
+    data.fill(0);
     return good;
 }
 
@@ -692,5 +795,15 @@ bool EvmKeystoreUiBackend::deleteAccount(QString address, QString password)
     else
         say(QStringLiteral("could not delete the account — wrong password, or this build is "
                            "not the configured custodian"));
+    return good;
+}
+
+// Derive another branch from a verified seed source. Secret fields are sent only to the keystore.
+bool EvmKeystoreUiBackend::addSeedWallet(QString paramsJson)
+{
+    setLastError(QString());
+    const bool good = ok(modules().keystore_module.import_seed_wallet(paramsJson), QString());
+    paramsJson.fill(QChar(0));
+    if (good) refresh();
     return good;
 }

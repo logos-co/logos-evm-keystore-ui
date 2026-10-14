@@ -7,50 +7,56 @@ account picker; `evm_signer_ui` shows what is being signed and takes the passwor
 Neither can change the keystore, and that is enforced by the keystore itself — this module is
 its configured **custodian**, and Tier D admits nobody else.
 
-It is also the [signer manager](https://github.com/logos-co/logos-signer-manager-module)'s
-custodian. An app that wants a Bitcoin wallet asks the manager to **open** one, and an app that
-wants signatures without a password each time asks for an account to stay **unlocked**; the
-person decides both here, on their own terms, through the `keystore.accounts.open` intent or the
-requests listed at the top of the screen. The keys app also unlocks and locks accounts with
-nobody asking, and closes wallets opened for apps. The Signer sends the person here to unlock the
-account a request signs with, through `keystore.accounts.unlock`: that account is offered first,
-for the app that asked, and the terms are still the person's.
+## Create and import
 
-## Screens
+The home screen lists keystore files, grouped by their verified recovery source. It has two
+entry points: **Create** and **Import**. Keycard/device inventory, global unlocked-account lists,
+and open-wallet lists are not part of this screen.
 
-| Screen | Keystore method |
+Create generates a phrase, asks the person to back it up and confirm three words, and then
+opens **Choose accounts**. Import offers a keystore file (native file picker or pasted JSON),
+a recovery phrase, or a private key. Recovery phrase import uses the same account chooser.
+
+The chooser previews five rows at a time without saving keys or contacting a network.
+Selections survive pagination and changes between Ethereum and Bitcoin. Ethereum defaults to
+`m/44'/60'/0'/0/i`; Advanced changes the hardened account branch. Bitcoin defaults to mainnet
+native SegWit, with test networks and Taproot available. A Bitcoin row represents an entire
+account at `m/purpose'/coin'/account'`, previewing its first receive address, not a single-address
+wallet. Existing accounts are marked **Already saved** and cannot be selected.
+
+**Save files** asks for an optional group name and one confirmed password. Each Ethereum
+account is independently encrypted as a standard Web3 V3 JSON file. Bitcoin retains its existing
+encrypted account-key/descriptor format, including both receive and change branches. The optional
+**Keep an encrypted recovery source** writes one separate phrase vault under the same password,
+reused by all selected accounts. A BIP39 passphrase remains separate and is never retained.
+
+**Add accounts…** on a recovery group verifies the saved or re-entered phrase against that group
+before previewing. Existing files, paths, passwords, and legacy derivation keys remain usable.
+Legacy derivable wallets also retain their existing **Add account** action.
+
+The backend checks the entire selection before saving, refuses duplicates, and reports the
+successful subset on an I/O failure. The UI removes saved selections before retrying, so a
+partial result is never presented as an all-or-nothing failure. Secrets are method arguments
+or dialog-local state, never replica properties; closing the wizard clears them.
+
+This package continues servicing existing signer-manager authorization intents for compatibility:
+`keystore.accounts.open` and `keystore.accounts.unlock`. Their request-specific dialogs remain
+available to wallet apps; the home screen no longer acts as the manager's inventory dashboard.
+**Add a wallet…** inside an open request uses this same account wizard, with the requested
+Bitcoin address type and network fixed. It offers a new phrase, an existing phrase, or a saved
+encrypted recovery source. Saving selects the first new account back in the pending request;
+it does not approve access or unlock it. Cancelling returns to that request without answering it.
+The retired Bitcoin-only import dialog is no longer packaged.
+
+| Operation | Keystore API |
 |---|---|
-| Accounts | `list_accounts`, `get_labels`, `list_groups`, `list_derivation_keys`, `get_provenance`, `get_group_labels` *(all ungated)* |
-| Create *(keeping the phrase is offered)* | `create_mnemonic` → shown once → confirmed → `import_mnemonic` |
-| Import phrase *(typed, keeping it is offered; or a kept phrase)* | `import_mnemonic` |
-| Import private key | `import_private_key` |
-| Import vault | `import_keystore_json` |
-| Add account *(on a wallet's own row)* | `derive_next_account` |
-| Add account → Advanced | `preview_addresses`, `derive_account_at` |
-| Manage wallet | `set_group_label`, `forget_derivation`, `remove_group` |
-| Rename an account | `set_label` |
-| Change password | `change_password` |
-| Export | `export_keystore_json` |
-| Delete a stranded derivation key | `list_derivation_keys` → `forget_derivation` |
-| Delete | `delete_account` |
-| Bitcoin wallet… *(create, type, or use a kept phrase; native segwit or taproot; main or test; for a typed or kept phrase, the day it was first used, so apps know where to start looking for its coins)* | `create_mnemonic`, `import_bitcoin` |
-| Manage a Bitcoin wallet → Show descriptor | `account_descriptors` |
-| Kept recovery phrases → Show or forget | `list_phrases`, `show_phrase`, `forget_phrase` |
-| Requests from apps *(open a wallet, unlock an account)* | the manager's `access_requests`, `acknowledge_access`, `approve_access`, `reject_access` |
-| Requests from apps → Add a wallet… *(of the kind and on the network asked for; picked once made)* | `create_mnemonic`, `import_bitcoin` |
-| Unlock… / Unlocked / Lock all | the manager's `unlock`, `unlocked`, `lock` |
-| Unlock, from the Signer *(`keystore.accounts.unlock`: the account offered first)* | the manager's `unlock` |
-| Open in apps / Close | the manager's `open_accounts`, `close_account` |
-| Requests from apps → a wallet on a device *(nothing to unlock; its first open sets the password of its data, and the day it was first used)* | the manager's `approve_access`, which makes its key with the keystore's `device_database_key` |
-| On devices *(accounts a device's signer module offers, and whether their data password is set)* | the manager's `accounts`, the keystore's `device_wallets` |
-| On devices → Forget data password… *(the way out of a forgotten one; apps then read the wallet's history again)* | `forget_device_wallet` |
-
-There is no plain "create account" button, and no way here to a key generated from randomness
-rather than derived from a phrase. `create_unrelated_account` stays on the keystore's contract —
-it is the only acknowledged door to such a key, and its `Unrecoverable` acknowledgement is what
-let `new_account` be deleted — but no shipped screen reaches it. Accounts on this screen come
-from a phrase, an import, or a wallet that keeps its derivation key. Accounts that arrived the
-other way still render, under a header that says what they are.
+| Generate recovery phrase | `create_mnemonic` |
+| Preview typed/saved recovery source | `preview_mnemonic` |
+| Save selected Ethereum / Bitcoin accounts | `import_mnemonic` / `import_bitcoin` |
+| Import / export standard Ethereum JSON | `import_keystore_json` / `export_keystore_json` |
+| Legacy derivation key preview / add | `preview_addresses` / `derive_account_at` / `derive_next_account` |
+| Manage account / wallet files | existing label, password, export and deletion APIs |
+| Manage encrypted recovery sources | `list_phrases`, `show_phrase`, `forget_phrase` |
 
 ## The tree
 
@@ -73,22 +79,10 @@ nothing on record says: `provenance_view` falls back to `Provenance::of("unknown
 account with no entry, so a vault copied into the directory by hand lands there beside one that
 predates the record. The keystore never guesses which, and neither does this.
 
-**The parent carries the shared prefix; the child carries only what varies.** A wallet's row
-shows `m/44'/60'/0'` once; its accounts show `#0`, `#1`, `CHANGE #0`. A node carries the account
-level it parsed, and a child recorded at a *different* one shows its whole path instead — `#3`
-under a header reading `m/44'/60'/0'` would name a path that account does not have. The badge used to be the
-path *within* a wallet, which is the same for every wallet's first account — so two wallets
-both read `HD 0'/0/0` and the one piece of provenance on screen said nothing. A wallet with no
-recorded prefix has nothing to complete, so its children carry the whole path instead, as
-monospaced text rather than an uppercased badge.
-
-That ordinal is the **leftmost column** of an account row, not a chip after the address: `#0`
-placed second reads as a property of that row, and placed first it reads as its position among
-the wallet's accounts. A column that appears on some rows and not others would be worse than
-either, so its presence is decided **per node** — `prefix >= 0`, which only a wallet node has —
-and a row inside such a node that carries no ordinal (a hand-edited path at another account
-level) leaves the slot blank at its full width. Blank, not an em-dash: a dash is a glyph the
-data does not contain, and that row is already showing its whole path further along.
+**Each account shows its full derivation path and copyable address.** Wallet headers still
+identify their shared prefix; the account row puts its name above the full path and address,
+matching Keycard. A missing path is shown as “Not recorded”. Ethereum and Bitcoin details
+share the same left alignment; the full path carries the account index without an extra badge.
 
 **The address is copyable, and what gets copied is the whole one.** The row shows
 `0x1234…abcd`; `LogosCopyableText` carries the full 42 characters as `copyText`. The name beside
@@ -140,11 +134,9 @@ it goes through `settle()` and the vault scan — and every wallet frame then cl
 accounts", which is the read failing stated as a fact about the wallet. A frame whose count was
 not read says so in its own line, and the empty screen says which of the two it is.
 
-**A tooltip may only assert a path where there is one.** The provenance badge completes into the
-full path on hover — but only the badges that *abbreviate* one, `#0` and `CHANGE #0`. `PRIVATE
-KEY` and `VAULT FILE` name how a key arrived; an imported key has `path: ""` by construction, and
-hovering it used to answer "an unrecognised path", asserting both that the account had a path and
-that it was broken.
+**Only recorded derivation paths are shown.** `PRIVATE KEY` and `VAULT FILE` describe how
+an account arrived, and imported keys have no derivation path. Their rows say “Not recorded”;
+no parent prefix or account index is used to invent one.
 
 **Two hazards the QML is written around.** A `.rep` SLOT with a return type answers a
 `QRemoteObjectPendingReply`, not the value — using the return directly compiles, runs and is
@@ -173,12 +165,10 @@ replica — strictly worse than the thing it would be carrying. Provenance and t
 stored. An unwritten phrase is an unrecoverable account, and the moment to catch that is
 before the account exists, not after.
 
-**Whether to keep a derivation key is chosen once per wallet, not per account.** It cannot
-honestly be per account: the key that derives account 3 derives account 5 as well. The choice
-is worded as what someone who copies the vault directory gets — one account, or every account
-under the wallet including ones not created yet — because that is the only part of it the
-person choosing can weigh. The default is to keep nothing, and it can be given up later
-(*Stop keeping the derivation key*) but never taken back up without the phrase.
+**New Ethereum accounts use independent standard files.** The wizard does not create an
+additional Ethereum derivation-key vault. Keeping an encrypted recovery source is optional;
+without one, adding accounts requires the phrase again. Existing derivation-key vaults remain
+usable and manageable, including the ability to stop retaining them.
 
 **A derivation key with no wallet record is shown, not hidden.** It is a node of the tree like
 any other wallet, with whatever accounts still name it nested inside. `list_derivation_keys`
@@ -278,3 +268,16 @@ person granted.
 nix build .#lgx-portable   # for Basecamp / logosctl
 nix build .#install        # the dev variant, for logos-standalone-app
 ```
+
+### Account-flow regression
+
+Run `python3 doctests/account_flow_ui.py` with an **empty isolated profile** and
+`QML_INSPECTOR_PORT=3769`. It covers cancellation without writes, invalid phrases, paginated
+selection across Ethereum and Bitcoin, password confirmation, one shared optional phrase vault,
+reusing the saved source for Taproot, duplicate protection, and mismatched BIP39 passphrases.
+`node doctests/tree_table.mjs` checks legacy and seed-group organization.
+
+Account rows show the derivation path and a copyable address, matching Keycard. Imported keys
+without derivation metadata say “Not recorded”. Bitcoin groups show their account path and first
+receiving address (0/0), derived from the saved public account key without unlocking a vault.
+Test-chain previews use the testnet/signet address prefix.

@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Dialogs
 import Logos.Controls
 import Logos.Theme
 import "tree.js" as Tree
@@ -172,6 +173,16 @@ Item {
     readonly property var nodes: !ready ? []
         : Tree.treeOf(accounts, provenance, groups, derivationKeys, reads, walletNames)
 
+    readonly property var seedNodes: Tree.seedGroupsOf(nodes)
+
+    function keptForSeed(bundle) {
+        for (var i = 0; i < bundle.nodes.length; ++i) {
+            var id = bundle.nodes[i].group.phrase
+            if (id && root.phrases.some(function(p) { return p.id === id && !p.staged })) return id
+        }
+        return ""
+    }
+
     function isKeyFrame(n) { return n.kind === "stranded" || n.kind === "unreadKey" }
 
     // Which nodes the user has folded away, by node id, so a refresh does not reopen them.
@@ -273,6 +284,13 @@ Item {
 
     // ── What each kind of node says about itself ───────────────────────────────────
     function nodeTitle(n) {
+        if (n.kind === "wallet" && n.group.seedId) {
+            var label = root.walletNameOf(n.id)
+            var family = n.group.family ? "Bitcoin" : "Ethereum"
+            var index = n.group.family ? parseInt(n.group.pathPrefix.split("/").pop())
+                        : n.addresses.length === 1 ? (root.provFor(n.addresses[0]) || {}).index : undefined
+            return family + (index !== undefined ? " " + (index + 1) : " accounts") + (label ? " · " + label : "")
+        }
         if (n.kind === "wallet" || n.kind === "nameOnly" || root.isKeyFrame(n))
             return walletTitleOf(n.group)
         if (n.kind === "imported") return "Imported"
@@ -289,7 +307,7 @@ Item {
         if (pre.length > 0) bits.push(pre)
         // A Bitcoin wallet has no EVM accounts to count: its addresses come from its descriptor.
         if (n.group && n.group.family)
-            bits.push(n.group.family === "bitcoin_taproot" ? "Bitcoin, taproot" : "Bitcoin, native segwit")
+            bits.push(n.group.family === "bitcoin_taproot" ? "Taproot" : "Native SegWit")
         else if (n.countKnown)
             bits.push(n.addresses.length === 1 ? "1 account" : n.addresses.length + " accounts")
         return bits.join("  ·  ")
@@ -343,8 +361,7 @@ Item {
     function nodeEmptyLine(n) {
         if (n.kind !== "wallet" || !n.countKnown || n.addresses.length > 0) return ""
         if (n.group && n.group.family)
-            return "Apps that open this wallet see its addresses and can ask you to sign; it holds no "
-                 + "EVM accounts."
+            return "Encrypted Bitcoin account with receive and change addresses."
         return n.group.derivable === true
                ? "No accounts. Adding one continues from #" + Tree.nextIndexOf(n.group) + "."
                : "No accounts. Adding one needs this wallet's recovery phrase."
@@ -360,18 +377,14 @@ Item {
         if (n.kind === "wallet" && n.group && n.group.family) {
             var btc = [{ name: "walletBitcoin_" + n.id, text: n.group.chain === "main" ? "BITCOIN" : "BITCOIN TEST",
                          color: Theme.palette.info }]
-            if (n.group.phrase)
-                btc.push({ name: "walletKeptPhrase_" + n.id, text: "PHRASE KEPT", color: Theme.palette.warning })
             if (n.group.usedPassphrase === true)
                 btc.push({ name: "walletPassphrase_" + n.id, text: "PASSPHRASE", color: Theme.palette.textSecondary })
             return btc
         }
         if (n.kind === "wallet") {
             var out = [{ name: "walletBadge_" + n.id,
-                         text: n.group.derivable ? "DERIVABLE" : "NOT DERIVABLE",
-                         color: n.group.derivable ? Theme.palette.info : Theme.palette.textSecondary }]
-            if (n.group.phrase)
-                out.push({ name: "walletKeptPhrase_" + n.id, text: "PHRASE KEPT", color: Theme.palette.warning })
+                         text: "JSON V3",
+                         color: Theme.palette.info }]
             if (n.group.usedPassphrase === true)
                 out.push({ name: "walletPassphrase_" + n.id, text: "PASSPHRASE",
                            color: Theme.palette.textSecondary })
@@ -409,7 +422,8 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            LogosText { text: "Accounts"; font.pixelSize: 22 }
+            LogosText { text: "Keystore files"; font.pixelSize: 22 }
+            LogosInfoButton { objectName: "keystoreFilesInfo"; title: "Account files and recovery groups"; Accessible.name: "Help: Account files and recovery groups"; text: "Each saved account has an encrypted file. Ethereum accounts use standard keystore JSON files; Bitcoin accounts use Bitcoin account files. Accounts derived from one recovery phrase are grouped together. An optional, separate encrypted recovery source lets you add more accounts later. Hardware accounts are managed in their device app." }
             Item { Layout.fillWidth: true }
             LogosBadge {
                 objectName: "custodianBadge"
@@ -443,162 +457,13 @@ Item {
             text: root.ready ? root.backend.lastError : ""
         }
 
-        // ── Apps' requests to the signer manager, decided here with the person ─────────
-        LogosText {
-            objectName: "notManagerCustodianNotice"
-            Layout.fillWidth: true
-            visible: root.ready && !root.managerCustodian
-            wrapMode: Text.WordWrap
-            color: Theme.palette.textSecondary
-            text: "This build is not the signer manager's custodian, so apps' requests to open or "
-                  + "unlock accounts are decided elsewhere."
-        }
-        ColumnLayout {
-            objectName: "accessRequests"
-            Layout.fillWidth: true
-            visible: root.access.length > 0
-            spacing: Theme.spacing.tiny
-            LogosText {
-                font.bold: true
-                text: root.access.length === 1 ? "1 request from an app" : root.access.length + " requests from apps"
-            }
-            Repeater {
-                model: root.access
-                delegate: LogosButton {
-                    objectName: "accessRequest_" + index
-                    Layout.fillWidth: true
-                    text: modelData.requester + (modelData.kind === "open" ? " asks to open a wallet"
-                                                                          : " asks to unlock an account")
-                    onClicked: logos.watch(root.backend.showAccess(modelData.handle),
-                                           function (ok) { if (ok) accessSheet.open() })
-                }
-            }
-        }
-        ColumnLayout {
-            objectName: "unlockedAccounts"
-            Layout.fillWidth: true
-            visible: root.unlocked.length > 0
-            spacing: Theme.spacing.tiny
-            RowLayout {
-                Layout.fillWidth: true
-                LogosText { text: "Unlocked"; font.bold: true }
-                Item { Layout.fillWidth: true }
-                LogosButton {
-                    objectName: "lockAllButton"
-                    text: "Lock all"
-                    onClicked: logos.watch(root.backend.lockAccount(""), function () {})
-                }
-            }
-            Repeater {
-                model: root.unlocked
-                delegate: RowLayout {
-                    Layout.fillWidth: true
-                    LogosText {
-                        objectName: "unlockedLine_" + index
-                        Layout.fillWidth: true
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        text: root.accountName(modelData.account) + " — " + root.termsLine(modelData)
-                    }
-                    LogosButton {
-                        objectName: "lockButton_" + index
-                        text: "Lock"
-                        onClicked: logos.watch(root.backend.lockAccount(modelData.account), function () {})
-                    }
-                }
-            }
-        }
-        ColumnLayout {
-            objectName: "openWallets"
-            Layout.fillWidth: true
-            visible: root.openWallets.length > 0
-            spacing: Theme.spacing.tiny
-            LogosText { text: "Open in apps"; font.bold: true }
-            Repeater {
-                model: root.openWallets
-                delegate: RowLayout {
-                    Layout.fillWidth: true
-                    LogosText {
-                        objectName: "openLine_" + index
-                        Layout.fillWidth: true
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        text: (root.walletNameOf(modelData.group) || modelData.group) + " — open for " + modelData.module
-                    }
-                    LogosButton {
-                        objectName: "closeButton_" + index
-                        text: "Close"
-                        onClicked: logos.watch(root.backend.closeWallet(modelData.module, modelData.group),
-                                               function () {})
-                    }
-                }
-            }
-        }
-
-        // ── Accounts on devices: offered by their own signer modules, beside the key files ─
-        ColumnLayout {
-            objectName: "deviceAccounts"
-            Layout.fillWidth: true
-            visible: root.deviceAccounts.length > 0
-            spacing: Theme.spacing.tiny
-            LogosText { text: "On devices"; font.bold: true }
-            Repeater {
-                model: root.deviceAccounts
-                delegate: ColumnLayout {
-                    id: device
-                    Layout.fillWidth: true
-                    readonly property bool hasKey: root.hasDeviceKey(modelData.signer, modelData.id)
-                    property bool confirming: false
-                    RowLayout {
-                        Layout.fillWidth: true
-                        LogosText {
-                            objectName: "deviceLine_" + index
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            textFormat: Text.PlainText
-                            elide: Text.ElideRight
-                            text: (modelData.label || modelData.id) + " — " + modelData.signer
-                                  + (modelData.available ? ", connected" : ", not connected")
-                                  + (device.hasKey ? ", data password set" : "")
-                        }
-                        LogosButton {
-                            objectName: "forgetDeviceKey_" + index
-                            visible: device.hasKey && !device.confirming
-                            text: "Forget data password…"
-                            onClicked: device.confirming = true
-                        }
-                    }
-                    // Forgetting is the way out of a forgotten password, and it costs the apps their records.
-                    LogosText {
-                        visible: device.confirming
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        color: Theme.palette.warning
-                        text: "Apps that keep this wallet's records can no longer read them, and read its history again. Its next open sets a new password."
-                    }
-                    RowLayout {
-                        visible: device.confirming
-                        LogosButton {
-                            objectName: "forgetDeviceKeyConfirm_" + index
-                            text: "Forget it"
-                            onClicked: {
-                                device.confirming = false
-                                logos.watch(root.backend.forgetDeviceWallet(modelData.signer, modelData.id), function () {})
-                            }
-                        }
-                        LogosButton { text: "Keep it"; onClicked: device.confirming = false }
-                    }
-                }
-            }
-        }
-
         // ── Kept recovery phrases: off unless the person chose to keep one ──────────────
         ColumnLayout {
             objectName: "keptPhrases"
             Layout.fillWidth: true
             visible: root.phrases.length > 0
             spacing: Theme.spacing.tiny
-            LogosText { text: "Kept recovery phrases"; font.bold: true }
+            LogosText { text: "Encrypted recovery sources"; font.bold: true }
             Repeater {
                 model: root.phrases
                 delegate: RowLayout {
@@ -666,26 +531,10 @@ Item {
             }
         }
 
-        // No global "Add account": it belongs to a wallet, and with two of them a global one
-        // cannot say which. It sits on each wallet's own row instead.
         RowLayout {
-            spacing: Theme.spacing.tiny
-            LogosButton { objectName: "newAccountButton";   text: "Create";        enabled: root.custodian; onClicked: createSheet.open() }
-            LogosButton { objectName: "importPhraseButton"; text: "Import phrase"; enabled: root.custodian; onClicked: phraseSheet.open() }
-            LogosButton { objectName: "importKeyButton";    text: "Import key";    enabled: root.custodian; onClicked: keySheet.open() }
-            LogosButton { objectName: "importVaultButton";  text: "Import vault";  enabled: root.custodian; onClicked: vaultSheet.open() }
-            LogosButton {
-                objectName: "bitcoinWalletButton"
-                text: "Bitcoin wallet…"
-                enabled: root.custodian
-                onClicked: bitcoinImportSheet.open()
-            }
-            LogosButton {
-                objectName: "unlockAccountButton"
-                text: "Unlock…"
-                enabled: root.managerCustodian && root.unlockable.length > 0
-                onClicked: unlockSheet.open()
-            }
+            spacing: Theme.spacing.small
+            LogosButton { objectName: "newAccountButton"; text: "Create"; enabled: root.custodian; onClicked: { accountFlow.mode = "create"; accountFlow.open() } }
+            LogosButton { objectName: "importAccountsButton"; text: "Import"; enabled: root.custodian; onClicked: { accountFlow.mode = "import"; accountFlow.open() } }
         }
 
         Item {
@@ -696,7 +545,7 @@ Item {
                 objectName: "accountsEmpty"
                 anchors.centerIn: parent
                 visible: root.nodes.length === 0 && !root.treeReadRefused
-                text: "No accounts yet"
+                text: "No keystore files yet. Create or import accounts to get started."
                 color: Theme.palette.textSecondary
             }
             LogosText {
@@ -723,57 +572,101 @@ Item {
                     spacing: Theme.spacing.small
 
                     Repeater {
-                        model: root.nodes
-                        delegate: AccountGroupNode {
+                        model: root.seedNodes
+                        delegate: ColumnLayout {
+                            id: seedBranch
+                            required property var modelData
+                            required property int index
+                            readonly property var bundle: modelData
                             Layout.fillWidth: true
-                            view: root
-                            nodeId: modelData.id
-                            title: root.nodeTitle(modelData)
-                            subtitle: root.nodeSubtitle(modelData)
-                            note: root.nodeNote(modelData)
-                            noteColor: root.nodeNoteColor(modelData)
-                            badges: root.nodeBadges(modelData)
-                            addresses: modelData.addresses
-                            prefix: modelData.prefix
-                            ordinals: Tree.showsOrdinals(modelData)
-                            emptyLine: root.nodeEmptyLine(modelData)
-                            unreadLine: root.nodeUnreadLine(modelData)
-                            expanded: root.collapsed[modelData.id] !== true
-
-                            addVisible: modelData.kind === "wallet" && modelData.group.derivable === true
-                                        && !modelData.group.family
-                            addEnabled: root.custodian
-                            addBlockedLine: (modelData.kind === "wallet" && modelData.group.derivable !== true)
-                                            ? "Adding an account needs this wallet's recovery phrase." : ""
-                            // A key frame is nameable too: its title is what the user has to
-                            // recognise before deciding whether to delete a live key.
-                            manageVisible: modelData.kind === "wallet" || modelData.kind === "nameOnly"
-                                           || root.isKeyFrame(modelData)
-                            manageEnabled: root.custodian
-                            deleteKeyVisible: root.isKeyFrame(modelData)
-                            deleteKeyEnabled: root.custodian
-
-                            onToggleRequested: root.toggle(modelData.id)
-                            onAddRequested: { addSheet.group = modelData.group; addSheet.open() }
-                            onManageWalletRequested: {
-                                if (modelData.group && modelData.group.family) {
-                                    bitcoinWalletSheet.group = modelData.group
-                                    bitcoinWalletSheet.open()
-                                    return
+                            spacing: Theme.spacing.small
+                            RowLayout {
+                                visible: seedBranch.bundle.seed
+                                Layout.fillWidth: true
+                                LogosText {
+                                    objectName: "seedTitle_" + seedBranch.index
+                                    Layout.fillWidth: true
+                                    font.bold: true
+                                    textFormat: Text.PlainText
+                                    text: root.walletNameOf(seedBranch.bundle.nodes[0].id)
+                                          || (seedBranch.bundle.linked ? "Recovery source " + (seedBranch.index + 1) : "Recovery source — not yet linked")
                                 }
-                                walletSheet.group = modelData.group
-                                walletSheet.stranded = root.isKeyFrame(modelData)
-                                walletSheet.recordKnown = modelData.kind !== "unreadKey"
-                                walletSheet.addresses = modelData.addresses
-                                walletSheet.countKnown = modelData.countKnown !== false
-                                walletSheet.keptKey = root.keptKeyOf(modelData)
-                                walletSheet.nameOnly = modelData.kind === "nameOnly"
-                                walletSheet.removable = root.walletRemovable(modelData)
-                                walletSheet.open()
+                                LogosButton {
+                                    objectName: "addSeedWallet_" + seedBranch.index
+                                    text: "Add accounts…"
+                                    enabled: root.custodian
+                                    onClicked: {
+                                        accountFlow.mode = "extend"
+                                        accountFlow.sourceGroup = seedBranch.bundle.nodes[0].group.id
+                                        accountFlow.keptId = root.keptForSeed(seedBranch.bundle)
+                                        accountFlow.needsPassphrase = seedBranch.bundle.nodes.some(function(n) { return n.group.usedPassphrase })
+                                        accountFlow.open()
+                                    }
+                                }
                             }
-                            onManageAccountRequested: function (address) { root.selected = address; manageSheet.open() }
-                            onForgetKeyRequested: logos.watch(root.backend.forgetDerivation(modelData.id),
-                                                              function () {})
+                            LogosText {
+                                visible: seedBranch.bundle.seed
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: Theme.palette.textSecondary
+                                text: seedBranch.bundle.linked
+                                      ? "Account files from the same recovery source."
+                                      : "Add a wallet with this recovery phrase to verify and group its existing wallets."
+                            }
+                            Repeater {
+                                model: seedBranch.bundle.nodes
+                                delegate: AccountGroupNode {
+                                    Layout.fillWidth: true
+                                    view: root
+                                    nodeId: modelData.id
+                                    title: root.nodeTitle(modelData)
+                                    subtitle: root.nodeSubtitle(modelData)
+                                    note: root.nodeNote(modelData)
+                                    noteColor: root.nodeNoteColor(modelData)
+                                    badges: root.nodeBadges(modelData)
+                                    addresses: modelData.addresses
+                                    bitcoinGroup: modelData.group && modelData.group.family ? modelData.group : null
+                                    prefix: modelData.prefix
+                                    ordinals: Tree.showsOrdinals(modelData)
+                                    emptyLine: root.nodeEmptyLine(modelData)
+                                    unreadLine: root.nodeUnreadLine(modelData)
+                                    expanded: root.collapsed[modelData.id] !== true
+
+                                    addVisible: modelData.kind === "wallet" && modelData.group.derivable === true
+                                                && !modelData.group.family
+                                    addEnabled: root.custodian
+                                    addBlockedLine: ""
+                                    // A key frame is nameable too: its title is what the user has to
+                                    // recognise before deciding whether to delete a live key.
+                                    manageVisible: modelData.kind === "wallet" || modelData.kind === "nameOnly"
+                                                   || root.isKeyFrame(modelData)
+                                    manageEnabled: root.custodian
+                                    deleteKeyVisible: root.isKeyFrame(modelData)
+                                    deleteKeyEnabled: root.custodian
+
+                                    onToggleRequested: root.toggle(modelData.id)
+                                    onAddRequested: { addSheet.group = modelData.group; addSheet.open() }
+                                    onManageWalletRequested: {
+                                        if (modelData.group && modelData.group.family) {
+                                            bitcoinWalletSheet.group = modelData.group
+                                            bitcoinWalletSheet.open()
+                                            return
+                                        }
+                                        walletSheet.group = modelData.group
+                                        walletSheet.stranded = root.isKeyFrame(modelData)
+                                        walletSheet.recordKnown = modelData.kind !== "unreadKey"
+                                        walletSheet.addresses = modelData.addresses
+                                        walletSheet.countKnown = modelData.countKnown !== false
+                                        walletSheet.keptKey = root.keptKeyOf(modelData)
+                                        walletSheet.nameOnly = modelData.kind === "nameOnly"
+                                        walletSheet.removable = root.walletRemovable(modelData)
+                                        walletSheet.open()
+                                    }
+                                    onManageAccountRequested: function (address) { root.selected = address; manageSheet.open() }
+                                    onForgetKeyRequested: logos.watch(root.backend.forgetDerivation(modelData.id),
+                                                                      function () {})
+                                }
+                            }
                         }
                     }
                 }
@@ -793,9 +686,11 @@ Item {
         onDecided: function (handle, approved) { root.answerIntent(handle, approved, approved ? "" : "rejected") }
         onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
         onAddWallet: function (family, chain) {
-            bitcoinImportSheet.presetFamily = family
-            bitcoinImportSheet.presetChain = chain
-            bitcoinImportSheet.open()
+            accountFlow.mode = "request"
+            accountFlow.requestHandle = accessSheet.shown.handle
+            accountFlow.presetFamily = family
+            accountFlow.presetChain = chain
+            accountFlow.open()
         }
     }
     UnlockSheet {
@@ -810,12 +705,6 @@ Item {
     }
 
     // ── Bitcoin wallets and kept phrases ───────────────────────────────────────────
-    BitcoinImportSheet {
-        id: bitcoinImportSheet
-        backend: root.backend
-        phrases: root.phrases
-        onAdded: function (group) { if (accessSheet.opened) accessSheet.pickWallet(group) }
-    }
     BitcoinWalletSheet { id: bitcoinWalletSheet; backend: root.backend; view: root }
     KeptPhraseSheet { id: keptPhraseSheet; backend: root.backend }
     ManageWalletSheet {
@@ -906,263 +795,16 @@ Item {
         }
     }
 
-    // ── Create: generate, SHOW, confirm, then commit ───────────────────────────────
-    LogosDialog {
-        id: createSheet
-        objectName: "createSheet"
-        title: "Create an account"
-        anchors.centerIn: parent
-        width: Math.min(parent.width - 40, 560)
-
-        // Held here only, and cleared on close. Never a property.
-        property string phrase: ""
-        property var words: []
-        onOpened: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset(); createKeep.reset() }
-        onClosed: { phrase = ""; words = []; confirmField.text = ""; newPw.text = ""; createName.text = ""; createStorage.reset(); createKeep.reset() }
-
-        contentItem: ColumnLayout {
-            spacing: Theme.spacing.small
-
-            LogosButton {
-                objectName: "generateButton"
-                text: "Generate a recovery phrase"
-                visible: createSheet.phrase.length === 0
-                onClicked: logos.watch(root.backend.generateMnemonic(12),
-                    function (phrase) {
-                        createSheet.phrase = phrase || ""
-                        createSheet.words = createSheet.phrase.length ? createSheet.phrase.split(" ") : []
-                    })
-            }
-
-            LogosText {
-                objectName: "phraseWarning"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Theme.palette.warning
-                text: "Write this down. It is the only way to recover the account, it is shown "
-                      + "once, and anyone who reads it can spend from the account."
-            }
-            LogosText {
-                objectName: "phraseText"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-                textFormat: Text.PlainText
-                wrapMode: Text.WordWrap
-                text: createSheet.phrase
-            }
-
-            LogosText {
-                visible: createSheet.phrase.length > 0
-                color: Theme.palette.textSecondary
-                text: createSheet.words.length > 0
-                      ? "Confirm words 1, 5 and 12, separated by spaces"
-                      : ""
-            }
-            LogosTextField {
-                id: confirmField
-                objectName: "confirmField"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-                placeholderText: "word1 word5 word12"
-            }
-            LogosTextField {
-                id: newPw
-                objectName: "createPasswordField"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-                echoMode: TextInput.Password
-                placeholderText: "Password for this account"
-            }
-            // Offered here because a wallet is easiest to recognise the moment it is made;
-            // it can be changed later from that wallet's Manage sheet.
-            LogosTextField {
-                id: createName
-                objectName: "createWalletNameField"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-                textInput.maximumLength: 40
-                placeholderText: "Name this wallet (optional)"
-            }
-
-            // The choice is made here, before the account exists, because it governs every
-            // account of this wallet and cannot be turned on afterwards.
-            StorageChoice {
-                id: createStorage
-                objectName: "createStorageChoice"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-            }
-            KeepPhraseChoice {
-                id: createKeep
-                namePrefix: "create"
-                visible: createSheet.phrase.length > 0
-                Layout.fillWidth: true
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                LogosButton { objectName: "createCancel"; text: "Cancel"; onClicked: createSheet.close() }
-                Item { Layout.fillWidth: true }
-                LogosButton {
-                    objectName: "createConfirm"
-                    text: "Create account"
-                    // The confirmation is the point: an unwritten phrase is an unrecoverable
-                    // account, so it is checked here before anything is stored.
-                    enabled: createSheet.words.length === 12 && newPw.text.length > 0
-                             && createStorage.complete && createKeep.complete
-                             && confirmField.text.trim().toLowerCase().split(/\s+/).join(" ")
-                                === [createSheet.words[0], createSheet.words[4], createSheet.words[11]].join(" ")
-                    // No BIP-39 passphrase on a phrase we just generated: it would be a second
-                    // secret to write down at the moment the first one is still unwritten.
-                    onClicked: logos.watch(root.backend.importMnemonic(createSheet.phrase, "", newPw.text,
-                                                                       createStorage.groupPassword,
-                                                                       createStorage.derivable,
-                                                                       createName.text.trim(),
-                                                                       createKeep.password),
-                        function (good) { if (good) createSheet.close() })
-                }
-            }
+    AccountFlowSheet {
+        id: accountFlow
+        backend: root.backend
+        phrases: root.phrases
+        onSaved: function(groups) {
+            if (accountFlow.requestHandle && accessSheet.opened && accessSheet.shown.handle === accountFlow.requestHandle && groups.length)
+                accessSheet.pickWallet(groups[0])
         }
-    }
-
-    // ── Import: phrase / private key / vault JSON ──────────────────────────────────
-    LogosDialog {
-        id: phraseSheet
-        objectName: "importPhraseSheet"
-        title: "Import a recovery phrase"
-        anchors.centerIn: parent
-        width: Math.min(parent.width - 40, 560)
-        // Typed words, or a phrase kept earlier with its own password.
-        property string source: "type"
-        property string keptId: ""
-        // Not `reset`: a Dialog already has a reset() signal, which would be emitted instead.
-        function clearForm() {
-            seedField.text = ""; seedPassphrase.text = ""; seedPw.text = ""; seedName.text = ""; phraseStorage.reset()
-            source = "type"; keptId = ""; seedKeptPw.text = ""; importKeep.reset(); seedTypeOption.checked = true
-        }
-        onOpened: clearForm()
-        onClosed: clearForm()
-        contentItem: ColumnLayout {
-            spacing: Theme.spacing.small
-            ButtonGroup { id: seedSourceGroup }
-            RowLayout {
-                visible: root.phrases.length > 0
-                LogosRadioButton { id: seedTypeOption; objectName: "importSourceType"; ButtonGroup.group: seedSourceGroup; checked: true; text: "Type a phrase"; onCheckedChanged: if (checked) phraseSheet.source = "type" }
-                LogosRadioButton { objectName: "importSourceKept"; ButtonGroup.group: seedSourceGroup; text: "Use a kept phrase"; onCheckedChanged: if (checked) phraseSheet.source = "kept" }
-            }
-            LogosTextArea {
-                id: seedField
-                objectName: "seedField"
-                visible: phraseSheet.source === "type"
-                Layout.fillWidth: true
-                placeholderText: "Recovery phrase (BIP-39 words)"
-            }
-            ButtonGroup { id: seedKeptGroup }
-            Repeater {
-                model: phraseSheet.source === "kept" ? root.phrases : []
-                delegate: LogosRadioButton {
-                    objectName: "importKept_" + index
-                    ButtonGroup.group: seedKeptGroup
-                    text: "Kept phrase " + String(modelData.id).substring(0, 10) + "…, used by "
-                          + (modelData.groups || []).length + " wallet(s)"
-                    onCheckedChanged: if (checked) phraseSheet.keptId = modelData.id
-                }
-            }
-            LogosTextField {
-                id: seedKeptPw
-                objectName: "importKeptPasswordField"
-                visible: phraseSheet.source === "kept"
-                Layout.fillWidth: true
-                echoMode: TextInput.Password
-                placeholderText: "The kept phrase's password"
-            }
-
-            // Visible by default, never behind a disclosure: a passphrase that is silently
-            // dropped produces a different, equally valid wallet, and nothing later says so.
-            LogosTextField {
-                id: seedPassphrase
-                objectName: "bip39PassphraseField"
-                Layout.fillWidth: true
-                echoMode: TextInput.Password
-                placeholderText: "BIP-39 passphrase, if the wallet had one (ASCII, optional)"
-            }
-            LogosText {
-                objectName: "passphraseHint"
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Theme.palette.textSecondary
-                // Spaces are counted, never trimmed: a trailing space is a different
-                // passphrase, and trimming it would derive accounts no other wallet agrees on.
-                text: seedPassphrase.text.length === 0
-                      ? "No passphrase. Leave this empty unless the wallet was set up with one."
-                      : seedPassphrase.text.length + " characters"
-                        + (seedPassphrase.text !== seedPassphrase.text.trim()
-                           ? " — starts or ends with a space, which counts as part of it" : "")
-            }
-            LogosText {
-                Layout.fillWidth: true
-                visible: seedPassphrase.text.length > 0
-                wrapMode: Text.WordWrap
-                color: Theme.palette.warning
-                text: "The passphrase is part of the secret and is not stored anywhere. Losing "
-                      + "it loses these accounts as completely as losing the phrase."
-            }
-
-            LogosTextField {
-                id: seedPw
-                objectName: "seedPasswordField"
-                Layout.fillWidth: true
-                echoMode: TextInput.Password
-                placeholderText: "Password for this account"
-            }
-            // Two wallets are told apart by their names before anything else. Without one this
-            // wallet is shown by its position here, which another import can move.
-            LogosTextField {
-                id: seedName
-                objectName: "importWalletNameField"
-                Layout.fillWidth: true
-                textInput.maximumLength: 40
-                placeholderText: "Name this wallet (optional)"
-            }
-            StorageChoice {
-                id: phraseStorage
-                objectName: "importStorageChoice"
-                Layout.fillWidth: true
-            }
-            KeepPhraseChoice {
-                id: importKeep
-                namePrefix: "import"
-                visible: phraseSheet.source === "type"
-                Layout.fillWidth: true
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                LogosButton { text: "Cancel"; onClicked: phraseSheet.close() }
-                Item { Layout.fillWidth: true }
-                LogosButton {
-                    objectName: "importPhraseConfirm"
-                    text: "Import"
-                    enabled: (phraseSheet.source === "kept" ? phraseSheet.keptId !== "" && seedKeptPw.text.length > 0
-                                                            : seedField.text.trim().length > 0 && importKeep.complete)
-                             && seedPw.text.length > 0 && phraseStorage.complete
-                    onClicked: {
-                        var done = function (good) { if (good) phraseSheet.close() }
-                        if (phraseSheet.source === "kept")
-                            logos.watch(root.backend.importMnemonicFromKept(phraseSheet.keptId, seedKeptPw.text,
-                                                                            seedPassphrase.text, seedPw.text,
-                                                                            phraseStorage.groupPassword,
-                                                                            phraseStorage.derivable,
-                                                                            seedName.text.trim()), done)
-                        else
-                            logos.watch(root.backend.importMnemonic(seedField.text.trim(), seedPassphrase.text,
-                                                                    seedPw.text, phraseStorage.groupPassword,
-                                                                    phraseStorage.derivable, seedName.text.trim(),
-                                                                    importKeep.password), done)
-                    }
-                }
-            }
-        }
+        onImportKey: keySheet.open()
+        onImportFile: vaultSheet.open()
     }
 
     LogosDialog {
@@ -1172,7 +814,7 @@ Item {
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
         onOpened: { keyField.text = ""; keyPw.text = "" }
-        onClosed: keyField.text = ""
+        onClosed: { keyField.text = ""; keyPw.text = "" }
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
             LogosTextField {
@@ -1207,17 +849,28 @@ Item {
     LogosDialog {
         id: vaultSheet
         objectName: "importVaultSheet"
-        title: "Import a keystore vault"
+        title: "Import a keystore file"
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
-        onOpened: { vaultField.text = ""; vaultOld.text = ""; vaultNew.text = "" }
-        onClosed: vaultField.text = ""
+        property string fileUrl: ""
+        onOpened: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = ""; pasteJson.checked = false }
+        onClosed: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = "" }
+        FileDialog {
+            id: vaultPicker
+            title: "Choose an Ethereum keystore file"
+            nameFilters: ["Keystore files (*.json)", "All files (*)"]
+            onAccepted: vaultSheet.fileUrl = selectedFile.toString()
+        }
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
+            LogosButton { visible: !pasteJson.checked; text: "Choose keystore file…"; onClicked: vaultPicker.open() }
+            LogosText { visible: !pasteJson.checked; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText; text: vaultSheet.fileUrl }
+            LogosCheckbox { id: pasteJson; text: "Paste JSON instead" }
             LogosTextArea {
                 id: vaultField
                 objectName: "vaultJsonField"
                 Layout.fillWidth: true
+                visible: pasteJson.checked
                 placeholderText: "Vault JSON"
             }
             LogosTextField {
@@ -1241,8 +894,9 @@ Item {
                 LogosButton {
                     objectName: "importVaultConfirm"
                     text: "Import"
-                    enabled: vaultField.text.trim().length > 0 && vaultNew.text.length > 0
-                    onClicked: logos.watch(root.backend.importVaultJson(vaultField.text.trim(), vaultOld.text, vaultNew.text),
+                    enabled: (pasteJson.checked ? vaultField.text.trim().length > 0 : vaultSheet.fileUrl.length > 0) && vaultNew.text.length > 0
+                    onClicked: logos.watch(pasteJson.checked ? root.backend.importVaultJson(vaultField.text.trim(), vaultOld.text, vaultNew.text)
+                                                            : root.backend.importVaultFile(vaultSheet.fileUrl, vaultOld.text, vaultNew.text),
                         function (good) { if (good) vaultSheet.close() })
                 }
             }

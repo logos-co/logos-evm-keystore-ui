@@ -305,3 +305,24 @@ function treeOf(accounts, provenance, groups, derivationKeys, reads, names) {
     }
     return out
 }
+
+// A seed is above its coin-specific wallets. Legacy wallets remain separate until a phrase
+// proves their common origin; imported private keys and unreadable records retain their nodes.
+function seedGroupsOf(nodes) {
+    var result = [], byId = Object.create(null)
+    nodes.forEach(function(n) {
+        if (n.kind !== "wallet") {
+            result.push({ id: n.id, seed: false, nodes: [n] })
+            return
+        }
+        var key = n.group.seedId || ("unlinked:" + n.id)
+        var group = byId[key]
+        if (!group) {
+            group = { id: key, seed: true, linked: !!n.group.seedId, nodes: [] }
+            byId[key] = group
+            result.push(group)
+        }
+        group.nodes.push(n)
+    })
+    return result
+}

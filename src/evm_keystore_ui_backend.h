@@ -32,14 +32,18 @@ public:
     bool closeWallet(QString module, QString group) override;
 
     QString generateMnemonic(int words) override;
+    QString previewSource(QString paramsJson) override;
+    QString saveAccounts(QString paramsJson) override;
     bool importMnemonic(QString phrase, QString bip39Passphrase, QString accountPassword,
                         QString groupPassword, bool derivable, QString groupLabel,
                         QString keepPhrasePassword) override;
+    bool addSeedWallet(QString paramsJson) override;
     bool importMnemonicFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
                                 QString accountPassword, QString groupPassword, bool derivable,
                                 QString groupLabel) override;
     bool importPrivateKey(QString privHex, QString accountPassword) override;
     bool importVaultJson(QString vaultJson, QString oldPassword, QString newPassword) override;
+    bool importVaultFile(QString fileUrl, QString oldPassword, QString newPassword) override;
 
     bool deriveNextAccount(QString group, QString groupPassword, QString accountPassword) override;
     bool deriveAccountAt(QString group, QString groupPassword, QString accountPassword,
