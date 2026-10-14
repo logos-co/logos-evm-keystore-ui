@@ -5,7 +5,7 @@ name: CI
 # The custodian screen's own test suite splits in two, and only the first half
 # can run here: `assert_ui.py --grep-only` and `tree_table.mjs` open no socket
 # and need no Qt, while sections 1 and up of assert_ui.py drive a live
-# logos-standalone-app over the QML inspector. That half is NOT wired up — it
+# Basecamp in standalone mode over the QML inspector. That half is NOT wired up — it
 # needs a built keystore_module, a staged -dev variant and a keystore holding two
 # derivable wallets, none of which a PR runner has. What IS covered is that the
 # flake builds and packages, every rule in src/qml/tree.js, the Theme tokens, the

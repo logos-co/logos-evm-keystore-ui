@@ -15,10 +15,10 @@ Sections 1 and up drive a live app over the QML inspector on port 3768 and are R
 they open sheets and toggle a disclosure, and press no confirm button. Port 3768 is also
 Basecamp's inspector port. Only ever point this at a fixture app you started yourself.
 
-Run against a `logos-standalone-app` started with QT_QPA_PLATFORM=offscreen and
-QML_INSPECTOR_PORT=3768, with keystore_module and evm_keystore_ui staged as the -dev variant, and a
-keystore holding at least two derivable wallets — the whole subject of this screen is two
-wallets whose first accounts sit at the same path.
+Run against Basecamp's standalone mode (`#app-standalone`) started with
+QT_QPA_PLATFORM=offscreen and QML_INSPECTOR_PORT=3768, with `--module` this repo's #install,
+keystore_module in `--modules-dir`, and a keystore holding at least two derivable wallets — the
+whole subject of this screen is two wallets whose first accounts sit at the same path.
 
 A source assertion here names the SITE it is about, never a region: asking whether
 `Text.PlainText` appears anywhere in a 600-line file is answered by the first item that sets

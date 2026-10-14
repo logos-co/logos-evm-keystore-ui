@@ -251,22 +251,23 @@ python3 doctests/assert_ui.py               # the rest, against an app on port 3
 ./doctests/run.sh                           # the e2e spec: an app's open and unlock, decided here
 ```
 
-`doctests/evm-keystore-ui-e2e.test.yaml` runs the keys app in a headless host beside the
-`keys_probe` fixture. The fixture asks to open any native segwit wallet on regtest before one
-exists, so the person adds one from the request, keeping its phrase, and opens it. The fixture
-then asks to unlock it for two confirmed signatures, and the person grants that too. Then the
-person shows the descriptor, makes an EVM wallet from the kept phrase without typing it, and
-shows and forgets the phrase. Last, the Signer's `keystore.accounts.unlock` arrives for the EVM
-wallet's account: the host has no shell, so the spec calls the view's own handler, and the person
-unlocks the account offered. The spec
-checks what the fixture was handed: the descriptors, a 32-byte database key, and the terms the
-person granted.
+`doctests/evm-keystore-ui-e2e.test.yaml` runs the keys app in Basecamp's standalone mode beside
+the `keys_probe` fixture and its app, `keys_probe_ui`, which sends each of the fixture's requests
+to the keys app through Basecamp's `keystore.accounts.open` intent. The fixture asks to open any
+native segwit wallet on regtest before one exists, so the person adds one from the request,
+keeping its phrase, and opens it. The fixture then asks to unlock it for two confirmed signatures,
+and to open a mock device's wallet, and the person grants both. Then the person shows the
+descriptor, adds an EVM account from the kept phrase without typing it, and shows and forgets the
+phrase. Last, the Signer's `keystore.accounts.unlock` arrives for the EVM account: the Signer is
+not installed, so the spec calls the view's own handler, and the person unlocks the account
+offered. The spec checks what the fixture was handed: the descriptors, a 32-byte database key,
+and the terms the person granted.
 
 ## Building
 
 ```bash
 nix build .#lgx-portable   # for Basecamp / logosctl
-nix build .#install        # the dev variant, for logos-standalone-app
+nix build .#install        # the dev variant, for Basecamp's standalone mode (--module)
 ```
 
 ### Account-flow regression

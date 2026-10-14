@@ -1,0 +1,38 @@
+{
+  "name": "keys_probe_ui",
+  "display_name": "Keys probe",
+  "version": "1.0.0",
+  "type": "ui_qml",
+  "category": "test",
+  "description": "Doc-test fixture: the app whose opening loads keys_probe, and which sends each of its requests to the keys app through Basecamp's keystore.accounts.open intent.",
+  "view": "Main.qml",
+  "icon": "icons/keys_probe.png",
+  "dependencies": [
+    "keys_probe"
+  ],
+  "dependency_overrides": {
+    "keys_probe": {
+      "file": "contracts/keys_probe.lidl"
+    }
+  },
+  "provides": [],
+  "uses": [
+    {
+      "intent": "keystore.accounts.open",
+      "cardinality": "single"
+    }
+  ],
+  "nix": {
+    "packages": {
+      "build": [],
+      "runtime": []
+    },
+    "external_libraries": [],
+    "cmake": {
+      "find_packages": [],
+      "extra_sources": [],
+      "extra_include_dirs": [],
+      "extra_link_libraries": []
+    }
+  }
+}

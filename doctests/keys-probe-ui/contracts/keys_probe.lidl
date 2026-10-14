@@ -1,0 +1,6 @@
+module keys_probe {
+  version "1.0.0"
+  depends []
+
+  method status() -> tstr description "What the probe has got so far: `{ ok, state, handle? }`. Ungated: a fixture holding nothing secret."
+}

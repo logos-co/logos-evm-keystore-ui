@@ -3,11 +3,11 @@
 //!   1. name the keystore's and the manager's roles (ungated)
 //!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
 //!   3. request_unlock for that wallet, two signatures, each confirmed, and wait
-//!   4. unplug the mock device: the keys app keeps its accounts listed, not connected
+//!   4. request_open for the mock device's wallet, and wait
 //!
-//! The person decides 3 and 4 in the keys app; this module only asks, and prints what it was
-//! handed with its receipt. It runs on its own thread, so the first outbound call cannot
-//! re-enter the host while this module is still initialising.
+//! The person decides 2 to 4 in the keys app, which keys_probe_ui sends them to; this module
+//! only asks, and prints what it was handed with its receipt. It runs on its own thread, so the
+//! first outbound call cannot re-enter the host while this module is still initialising.
 
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -22,7 +22,7 @@ const KEYSTORE_ROLES: &str = r#"{"custodians":"evm_keystore_ui","managers":"sign
 const MANAGER_ROLES: &str = r#"{"approvers":"evm_signer_ui","custodians":"evm_keystore_ui","signers":["keystore_module","mock_device_signer"]}"#;
 
 pub trait KeysProbeModule: Send + 'static {
-    /// What the probe has got so far: `{ ok, state, … }`. Ungated: a fixture holding nothing secret.
+    /// What the probe has got so far: `{ ok, state, handle? }`. Ungated: a fixture holding nothing secret.
     fn status(&mut self) -> String;
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
 }
@@ -49,10 +49,12 @@ fn text(v: &Value, key: &str) -> String {
 }
 
 /// Ask, then wait for the person: the result collected with the receipt, or why there is none.
-fn ask_and_wait(what: &str, reply: Result<String, String>) -> Result<Value, String> {
+/// The pending handle goes in `status`, so keys_probe_ui can send the person to the keys app.
+fn ask_and_wait(state: &Shared, what: &str, reply: Result<String, String>) -> Result<Value, String> {
     let v = ok_value(reply)?;
     let (handle, receipt) = (text(&v, "handle"), text(&v, "receipt"));
     println!("{MARK}_{what}_REQUESTED: {handle}");
+    *state.lock().unwrap() = json!({ "ok": true, "state": "asking", "kind": what, "handle": handle });
     for _ in 0..1200 {
         std::thread::sleep(Duration::from_millis(250));
         let Ok(s) = ok_value(modules().signer_manager_module.approval_status(&handle, &receipt)) else { continue };
@@ -84,7 +86,7 @@ fn drive(state: Shared) {
 
     // No wallet exists yet: the person adds one from the request itself.
     let open = json!({ "family": "bitcoin", "network": "regtest", "reason": "Doc-test: open a regtest wallet" });
-    let group = match ask_and_wait("OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
+    let group = match ask_and_wait(&state, "OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
             let key_len = text(&v, "databaseKey").len();
             println!("{MARK}_WALLET: {}", text(&v, "group"));
@@ -102,7 +104,7 @@ fn drive(state: Shared) {
 
     let unlock = json!({ "account": group, "count": 2, "confirm": true, "apps": ["keys_probe"],
                          "reason": "Doc-test: two signatures" });
-    match ask_and_wait("UNLOCK", modules().signer_manager_module.request_unlock(&unlock.to_string()).map_err(|e| format!("{e:?}"))) {
+    match ask_and_wait(&state, "UNLOCK", modules().signer_manager_module.request_unlock(&unlock.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
             println!("{MARK}_UNLOCKED: {}", v.get("terms").cloned().unwrap_or(Value::Null));
             set!(json!({ "ok": true, "state": "unlocked" }));
@@ -116,7 +118,7 @@ fn drive(state: Shared) {
 
     // A wallet whose key is on the mock device: its first open sets the password of its data.
     let device = json!({ "group": "mock-segwit", "network": "regtest", "reason": "Doc-test: open the device's wallet" });
-    match ask_and_wait("DEVICE_OPEN", modules().signer_manager_module.request_open(&device.to_string()).map_err(|e| format!("{e:?}"))) {
+    match ask_and_wait(&state, "DEVICE_OPEN", modules().signer_manager_module.request_open(&device.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
             println!(
                 "{MARK}_DEVICE_OPENED: origin={} birthday={} databaseKey={} hex chars",
@@ -131,12 +133,6 @@ fn drive(state: Shared) {
             set!(json!({ "ok": false, "state": "device_open_failed", "error": e }));
             return;
         }
-    }
-
-    std::thread::sleep(Duration::from_millis(1000));
-    match ok_value(modules().mock_device_signer.plug(false)) {
-        Ok(_) => println!("{MARK}_UNPLUGGED"),
-        Err(e) => println!("{MARK}_ERROR: unplug: {e}"),
     }
 }
 
