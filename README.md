@@ -258,13 +258,14 @@ python3 doctests/assert_ui.py               # the rest, against an app on port 3
 the `keys_probe` fixture and its app, `keys_probe_ui`, which sends each of the fixture's requests
 to the keys app through Basecamp's `keystore.accounts.open` intent. The fixture asks to open any
 native segwit wallet on regtest before one exists, so the person adds one from the request,
-keeping its phrase, and opens it. The fixture then asks to unlock it for two confirmed signatures,
-and to open a mock device's wallet, and the person grants both. Then the person shows the
-descriptor, adds an EVM account from the kept phrase without typing it, and shows and forgets the
-phrase. Last, the Signer's `keystore.accounts.unlock` arrives for the EVM account: the Signer is
-not installed, so the spec calls the view's own handler, and the person unlocks the account
-offered. The spec checks what the fixture was handed: the descriptors, a 32-byte database key,
-and the terms the person granted.
+keeping its phrase and giving the day it was first used, and opens it. The fixture then asks to
+unlock it for two confirmed signatures, and to open a mock device's wallet, and the person grants
+both. Then the person shows the descriptor, adds an EVM account from the kept phrase without
+typing it, and shows and forgets the phrase. The Signer's `keystore.accounts.unlock` arrives for
+the EVM account: the Signer is not installed, so the spec calls the view's own handler, and the
+person unlocks the account offered. Last, the fixture asks for a taproot wallet, and the person
+creates one. The spec checks what the fixture was handed: the descriptors, a 32-byte database
+key, where each wallet's history starts, and the terms the person granted.
 
 ## Building
 

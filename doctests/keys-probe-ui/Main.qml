@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 // keys_probe's face. The probe asks the signer manager; this sends the person to the keys app
 // with each request's handle, through Basecamp's intent, the way a wallet app does.
@@ -26,9 +27,18 @@ Item {
     }
     Timer { interval: 500; running: true; repeat: true; onTriggered: root.poll() }
 
-    Text {
+    Column {
         anchors.centerIn: parent
-        text: root.asked === "" ? "keys_probe has not asked yet."
-                                : "keys_probe asked the keys app to decide " + root.asked + "."
+        spacing: 12
+        Text {
+            text: root.asked === "" ? "keys_probe has not asked yet."
+                                    : "keys_probe asked the keys app to decide " + root.asked + "."
+        }
+        // A wallet the person makes in the keys app, from this app's request.
+        Button {
+            objectName: "askNewWallet"
+            text: "Ask for a new wallet"
+            onClicked: logos.callModuleAsync("keys_probe", "ask_new_wallet", [], function () {}, 5000)
+        }
     }
 }

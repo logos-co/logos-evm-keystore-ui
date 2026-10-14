@@ -4,8 +4,9 @@
 //!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
 //!   3. request_unlock for that wallet, two signatures, each confirmed, and wait
 //!   4. request_open for the mock device's wallet, and wait
+//!   5. when keys_probe_ui asks, request_open for a regtest taproot wallet: the person creates one
 //!
-//! The person decides 2 to 4 in the keys app, which keys_probe_ui sends them to; this module
+//! The person decides 2 to 5 in the keys app, which keys_probe_ui sends them to; this module
 //! only asks, and prints what it was handed with its receipt. It runs on its own thread, so the
 //! first outbound call cannot re-enter the host while this module is still initialising.
 
@@ -24,6 +25,8 @@ const MANAGER_ROLES: &str = r#"{"approvers":"evm_signer_ui","custodians":"evm_ke
 pub trait KeysProbeModule: Send + 'static {
     /// What the probe has got so far: `{ ok, state, handle? }`. Ungated: a fixture holding nothing secret.
     fn status(&mut self) -> String;
+    /// Ask to open a regtest taproot wallet, which the person creates; answers at once. Ungated.
+    fn ask_new_wallet(&mut self) -> String;
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {}
 }
 
@@ -136,6 +139,21 @@ fn drive(state: Shared) {
     }
 }
 
+/// A wallet made in the keys app: its history starts the day it was made.
+fn new_wallet(state: Shared) {
+    let ask = json!({ "family": "bitcoin_taproot", "network": "regtest", "reason": "Doc-test: open a new wallet" });
+    match ask_and_wait(&state, "NEW_OPEN", modules().signer_manager_module.request_open(&ask.to_string()).map_err(|e| format!("{e:?}"))) {
+        Ok(v) => {
+            println!("{MARK}_NEW_STARTS: origin={} birthday={}", text(&v, "origin"), text(&v, "birthday"));
+            *state.lock().unwrap() = json!({ "ok": true, "state": "new_opened" });
+        }
+        Err(e) => {
+            println!("{MARK}_ERROR: new open: {e}");
+            *state.lock().unwrap() = json!({ "ok": false, "state": "new_open_failed", "error": e });
+        }
+    }
+}
+
 impl KeysProbeModule for KeysProbeModuleImpl {
     fn on_context_ready(&mut self, _ctx: &RustModuleContext) {
         let state = std::sync::Arc::clone(&self.state);
@@ -145,6 +163,12 @@ impl KeysProbeModule for KeysProbeModuleImpl {
 
     fn status(&mut self) -> String {
         self.state.lock().unwrap().to_string()
+    }
+
+    fn ask_new_wallet(&mut self) -> String {
+        let state = std::sync::Arc::clone(&self.state);
+        std::thread::spawn(move || new_wallet(state));
+        json!({ "ok": true }).to_string()
     }
 }
 
