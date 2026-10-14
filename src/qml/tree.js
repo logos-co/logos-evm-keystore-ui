@@ -181,30 +181,6 @@ function badgeOf(provenance, address, prefix) {
     return { kind: "none", text: "" }
 }
 
-// The leftmost column is decided per NODE, not per row: a wallet node is the only kind built
-// with a parsed account level, so a node either has the column on every row or on none. That is
-// what stops it going ragged where a row carries no ordinal.
-function showsOrdinals(node) { return !!node && node.prefix >= 0 }
-
-// What that column says for one account: its position within the wallet, or nothing. Nothing
-// means a reserved, empty slot rather than a dash — a dash is a glyph the data does not contain,
-// and those rows already say what they are further along the row.
-function ordinalOf(provenance, address, prefix) {
-    var b = badgeOf(provenance, address, prefix)
-    return (b.kind === "index" || b.kind === "change") ? b.text : ""
-}
-
-// The full path a badge abbreviates, or "" when the badge is not about a path at all. The
-// tooltip answered "an unrecognised path" over PRIVATE KEY, asserting both that the account
-// had a path and that it was broken; an imported key has none by construction.
-function pathTipOf(provenance, address, prefix) {
-    var b = badgeOf(provenance, address, prefix)
-    if (b.kind !== "index" && b.kind !== "change") return ""
-    var p = provOf(provenance, address)
-    var m = parsePath(p ? p.path : "")
-    return m ? "m/44'/60'/" + m[0] + "'/" + m[1] + "/" + m[2] : ""
-}
-
 function nodeOf(kind, id, group, addresses, prefix) {
     return { kind: kind, id: id, group: group, addresses: addresses,
              prefix: prefix, countKnown: true }

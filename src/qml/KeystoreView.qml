@@ -231,11 +231,6 @@ Item {
         var m = Tree.parsePath(path)
         return m ? "m/44'/60'/" + m[0] + "'/" + m[1] + "/" + m[2] : ""
     }
-    // Empty unless the badge beside it abbreviates a path. PRIVATE KEY names how a key
-    // arrived; hovering it must not assert a path the account never had.
-    function pathTipFor(a, prefix) { return Tree.pathTipOf(root.provenance, a, prefix) }
-    // What the leftmost column says for one account. "" is a reserved slot, not a missing one.
-    function ordinalFor(a, prefix) { return Tree.ordinalOf(root.provenance, a, prefix) }
 
     // What identifies a wallet: the name someone gave it, else its position here. Never its
     // first account — deleting account #0 retires the provenance entry that named the wallet,
@@ -627,7 +622,6 @@ Item {
                                     addresses: modelData.addresses
                                     bitcoinGroup: modelData.group && modelData.group.family ? modelData.group : null
                                     prefix: modelData.prefix
-                                    ordinals: Tree.showsOrdinals(modelData)
                                     emptyLine: root.nodeEmptyLine(modelData)
                                     unreadLine: root.nodeUnreadLine(modelData)
                                     expanded: root.collapsed[modelData.id] !== true

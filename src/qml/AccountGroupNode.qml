@@ -28,13 +28,6 @@ LogosFrame {
     // The account level the header carries, -1 for none. A child recorded at another level
     // shows its whole path rather than borrowing this one.
     property int prefix: -1
-    // Whether this node's rows carry the leftmost ordinal column at all. Per node, never per
-    // row: a column that appears on some rows and not others is the ragged edge itself.
-    property bool ordinals: false
-    // One width for the whole node, from the widest thing the column can hold, so the
-    // addresses beside it line up whatever each row's ordinal turns out to be.
-    readonly property int ordinalWidth:
-        Math.ceil(ordinalMetric.width) + 2 * Theme.spacing.small + 2
     // Shown in place of the children when a node genuinely holds none. `unreadLine` is the
     // other case, and they are two properties because they are two different sentences: one
     // reports the wallet, the other reports the read.
@@ -62,19 +55,6 @@ LogosFrame {
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.tiny
-
-        // LogosBadge's own label font, so the reserved width matches what a badge renders.
-        // The family is half of that: its label is a LogosText, i.e. Public Sans, and
-        // measuring in the default face under-reserves by more than the slack allows.
-        TextMetrics {
-            id: ordinalMetric
-            font.family: Theme.typography.publicSans
-            font.pixelSize: 11
-            font.letterSpacing: 0.22
-            font.capitalization: Font.AllUppercase
-            font.weight: Theme.typography.weightMedium
-            text: "CHANGE #88"
-        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -240,10 +220,6 @@ LogosFrame {
                 spacing: Theme.spacing.small
 
                 readonly property var badge: node.view.badgeFor(modelData, node.prefix)
-                // Empty unless this badge abbreviates a path. It is what decides whether the
-                // badge is hoverable at all, so a badge with nothing to complete says nothing.
-                readonly property string pathTip: node.view.pathTipFor(modelData, node.prefix)
-                readonly property string ordinal: node.view.ordinalFor(modelData, node.prefix)
 
                 ColumnLayout {
                     Layout.fillWidth: true

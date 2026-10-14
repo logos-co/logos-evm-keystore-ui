@@ -86,7 +86,6 @@ console.log("3a) a child only drops the account level its PARENT carries");
 const STRAY = { [A1]: derived(G1, "m/44'/60'/5'/0/3", 3) };
 check("another account level is shown whole, not abbreviated under this one",
       T.badgeOf(STRAY, A1, 1), { kind: "path", text: "m/44'/60'/5'/0/3" });
-check("and a whole path has nothing left to complete", T.pathTipOf(STRAY, A1, 1), "");
 check("under its own parent it abbreviates", T.badgeOf(STRAY, A1, 5),
       { kind: "index", text: "#3" });
 check("a change address at another level too",
@@ -269,67 +268,7 @@ check("mixed case", T.originOf({ "9992000000000000000000000000000000000001": { o
                                A1), "random");
 check("absent is unknown, never guessed", T.originOf({}, A1), "unknown");
 
-console.log("13) the tooltip completes a path only where the badge abbreviates one");
-// The defect: the badge showed for every kind but `none` and `path`, and its tooltip called
-// fullPathOf → "an unrecognised path". Hovering PRIVATE KEY therefore asserted that the
-// account HAS a path and that it is broken. An imported key has path "" by construction.
-check("a derived account's badge completes", T.pathTipOf(prov, A3, 0), "m/44'/60'/0'/0/1");
-check("a change address too", T.pathTipOf(chg, A1, 0), "m/44'/60'/0'/1/3");
-check("an imported key claims none", T.pathTipOf(prov, IMP, 0), "");
-check("a vault file claims none",
-      T.pathTipOf({ x: { origin: "imported-json" } }, "x", 0), "");
-check("nor does an account with no record", T.pathTipOf(prov, OLD, 0), "");
-check("nor a random key", T.pathTipOf({ x: { origin: "random" } }, "x", 0), "");
-check("a badge that already IS the whole path has nothing to complete",
-      T.pathTipOf(chg, A1, -1), "");
-check("a derived account whose path will not parse claims none",
-      T.pathTipOf({ x: { origin: "derived", path: "m/0/1", index: 1 } }, "x", 0), "");
-check("and the tip is rebuilt from the parsed parts, never echoed",
-      T.pathTipOf({ x: { origin: "derived", path: "m/44'/60'/1'/0/2 <b>", index: 2 } }, "x", 0),
-      "");
-
-console.log("14) the leftmost column is per NODE, so a row with no ordinal is not ragged");
-// The ordinal moved to the front of the row, which makes it a column — and a column that
-// appears on some rows and not others is the ragged edge itself. `prefix >= 0` decides it, and
-// only a wallet node is built with a parsed account level.
-const columned = T.treeOf(accounts, prov, [wallet(G1)], [G2], {});
-check("the shapes on screen", columned.map((n) => n.kind),
-      ["wallet", "stranded", "imported", "unrecorded"]);
-check("only the wallet node carries the column", columned.map((n) => T.showsOrdinals(n)),
-      [true, false, false, false]);
-check("and every row of it fills one",
-      columned[0].addresses.map((a) => T.ordinalOf(prov, a, columned[0].prefix)), ["#0", "#1"]);
-// The rows that would leave a blank slot. Blank, not a dash: a dash is a glyph the data does
-// not contain, and each of these already says what it is elsewhere in the row.
-check("a change address says so in the same column", T.ordinalOf(chg, A1, 0), "CHANGE #3");
-check("a row recorded at another account level has none", T.ordinalOf(STRAY, A1, 1), "");
-check("nor an imported key", T.ordinalOf(prov, IMP, -1), "");
-check("nor an account with no record", T.ordinalOf(prov, OLD, 0), "");
-check("nor a random key", T.ordinalOf({ x: { origin: "random" } }, "x", 0), "");
-check("nor a derived account whose path will not parse",
-      T.ordinalOf({ x: { origin: "derived", path: "m/0/1", index: 1 } }, "x", 0), "");
-// A whole path in a column sized for `#N` is what the column exists to avoid.
-check("the column never holds a whole path",
-      columned.reduce((acc, n) => acc.concat(n.addresses.map(
-          (a) => T.ordinalOf(prov, a, n.prefix))), []).filter((t) => t.indexOf("/") >= 0), []);
-check("and no node without the column has a row that would fill one",
-      columned.slice(1).reduce((acc, n) => acc.concat(n.addresses.map(
-          (a) => T.ordinalOf(prov, a, n.prefix))), []).filter((t) => t.length > 0), []);
-// One source for both, so the column and the badge cannot come to disagree.
-check("the column says exactly what the badge said",
-      columned[0].addresses.map((a) => T.ordinalOf(prov, a, 0) === T.badgeOf(prov, a, 0).text),
-      [true, true]);
-check("a node with no level to complete shows no column",
-      [T.showsOrdinals({ prefix: -1 }), T.showsOrdinals(null), T.showsOrdinals({ prefix: 0 })],
-      [false, false, true]);
-// Every kind of node the tree can build, asked the one question the column depends on.
-check("the frames a refused wallet list leaves behind carry no column either",
-      T.treeOf(accounts, prov, [], KEYS, { groups: false }).map((n) => T.showsOrdinals(n)),
-      [false, false, false, false]);
-check("and neither does the flat node a refused provenance read produces",
-      T.unreadableNodes(accounts, [], []).map((n) => T.showsOrdinals(n)), [false]);
-
-console.log("15) a name with nothing left under it is a row of its own, so it can be removed");
+console.log("13) a name with nothing left under it is a row of its own, so it can be removed");
 // The keystore removes a name whose record and key have both gone; the tree built its nodes
 // from records and key ids alone, so that row was never drawn and the call could not be aimed.
 const LEFT = "g_" + "beef1234".padEnd(32, "2");
@@ -356,7 +295,7 @@ check("without the frame it has no title at all",
 // wallet's: renaming what is on screen must not renumber the wallets above it.
 check("it takes the last ordinal", T.walletFrameIds(groups, [G1], [LEFT]).slice(-1), [LEFT]);
 
-console.log("16) wallets from the same seed share a parent across chains");
+console.log("14) wallets from the same seed share a parent across chains");
 const seedNodes = [
   {kind: "wallet", id: "eth", group: {seedId: "seed1", family: null}},
   {kind: "wallet", id: "legacy", group: {}},

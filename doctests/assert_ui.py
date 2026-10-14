@@ -290,8 +290,6 @@ print("0b1) a tooltip may only assert a path where there IS one")
 # account has a path AND that it is broken; an imported key has path "" by construction.
 check("the sentence that invented a path is gone", "an unrecognised path" in ALL, False)
 check("and so is the function that produced it", "fullPathOf" in ALL, False)
-check("the tip is decided in tree.js, where a table runs it",
-      "function pathTipOf" in (QML / "tree.js").read_text(), True)
 # The tip left with the ordinal column: a row now states its whole path, so nothing on it
 # completes one on hover.
 check("no row offers a path on hover",
@@ -418,6 +416,11 @@ print("0k) a row states its whole path, so none abbreviates one and none is ragg
 # The ordinal column and its hover are gone: grouped under its recovery source, each row says
 # its name, its path and its address, in that order.
 check("the ordinal column is gone", 'objectName: "index_"' in code(node), False)
+check("and so is the code that sized and filled it", "ordinal" in code(node), False)
+treejs = code((QML / "tree.js").read_text())
+check("nothing computes an ordinal or a path tip for a row any more",
+      [f for f in ("ordinalFor", "pathTipFor", "showsOrdinals", "ordinalOf", "pathTipOf")
+       if f in code(view) or f in treejs], [])
 check("the path is its own item", 'objectName: "path_" + modelData' in code(node), True)
 path = block(code(node), 'objectName: "path_" + modelData', 5)
 check("on every row, not only some", "visible:" in path, False)
@@ -669,19 +672,7 @@ print("7) creating a key from randomness is not reachable from this screen")
 check("no toolbar action", oid("unrelatedKeyButton") is None, True)
 check("and no sheet behind it", oid("unrelatedAccountSheet") is None, True)
 
-print("8) a badge only offers a path where it abbreviates one")
-# How the defect was measured: hovering PRIVATE KEY answered "an unrecognised path". Asked of
-# the real keystore, of every badge on screen, rather than of a fixture.
-tips = js("JSON.stringify(nodes.reduce(function(acc,n){return acc.concat("
-          "n.addresses.map(function(a){return [badgeFor(a,n.prefix).kind,"
-          "pathTipFor(a,n.prefix)]}))},[]))") or []
-print(f"    badge kinds: {sorted(set(k for k, _ in tips))}")
-check("nothing but #n and CHANGE #n completes into a path",
-      [k for k, t in tips if t and k not in ("index", "change")], [])
-check("and those that do complete into one this view rebuilt",
-      [t for k, t in tips if k in ("index", "change") and not re.fullmatch(r"m/44'/60'/\d+'/\d+/\d+", str(t))], [])
-
-print("9) a refused read is named, and no frame claims a count it did not read")
+print("8) a refused read is named, and no frame claims a count it did not read")
 refused = js("JSON.stringify(refusedReads)") or []
 print(f"    refused: {refused}")
 check("the notice is shown exactly when something was refused",
@@ -692,16 +683,7 @@ check("a frame whose count was not read says so, and says nothing else",
       [i for i in unknown if (props(f"nodeEmpty_{i}").get("text") or "")
        or not (props(f"nodeUnread_{i}").get("text") or "")], [])
 
-print("10) the ordinal column is per node, and every row of a node agrees with it")
-cols = js("JSON.stringify(nodes.map(function(n){return {kind:n.kind,col:n.prefix>=0,"
-          "ords:n.addresses.map(function(a){return ordinalFor(a,n.prefix)})}}))") or []
-print(f"    columns: {[(c['kind'], c['col']) for c in cols]}")
-check("only a wallet node carries the column",
-      [c["kind"] for c in cols if c["col"] and c["kind"] != "wallet"], [])
-check("and no node without it has a row that would fill one",
-      [c["kind"] for c in cols if not c["col"] and [o for o in c["ords"] if o]], [])
-check("what the column says is a position, never a path",
-      [o for c in cols for o in c["ords"] if "/" in str(o)], [])
+print("9) a row states its whole path, not an ordinal")
 if wallets and wallets[0]["n"] > 0:
     one = js(f"JSON.stringify(nodes.filter(function(n){{return n.id==='{wallets[0]['id']}'}})"
              "[0].addresses[0])")
@@ -712,7 +694,7 @@ if wallets and wallets[0]["n"] > 0:
     check("and the address beside it is the copyable control",
           props(f"account_{one}").get("copyText"), one)
 
-print("11) removing a wallet is offered only where the view can show it holds nothing")
+print("10) removing a wallet is offered only where the view can show it holds nothing")
 offered = js("JSON.stringify(nodes.filter(function(n){return walletRemovable(n)})"
              ".map(function(n){return [n.id, n.addresses.length, n.countKnown]}))") or []
 print(f"    removable: {offered}")
