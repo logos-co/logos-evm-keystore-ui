@@ -156,7 +156,8 @@ LogosDialog {
                     visible: sheet.step === 0; Layout.fillWidth: true
                     LogosText {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        text: sheet.mode === "create" ? "Write down your recovery phrase. Anyone with these words can access its accounts."
+                        text: sheet.mode === "create" ? "Write this down. It is the only way to recover the account, it is shown "
+                                                        + "once, and anyone who reads it can spend from the account."
                             : sheet.keptId ? "Unlock the encrypted recovery source to preview more accounts."
                             : "Enter your recovery phrase to preview Ethereum and Bitcoin accounts."
                     }
@@ -234,6 +235,14 @@ LogosDialog {
                     LogosTextField {
                         id: passphrase; objectName: "flowPassphrase"; Layout.fillWidth: true
                         visible: hasPassphrase.checked; echoMode: TextInput.Password; placeholderText: "BIP39 passphrase (exactly as originally used)"
+                    }
+                    // The field is masked, so a stray space is invisible, and it derives other accounts.
+                    LogosText {
+                        objectName: "flowPassphraseHint"; visible: hasPassphrase.checked && passphrase.text.length > 0
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
+                        text: passphrase.text.length + " characters"
+                              + (passphrase.text !== passphrase.text.trim()
+                                 ? " — starts or ends with a space, which counts as part of it" : "")
                     }
                     LogosText {
                         visible: hasPassphrase.checked; Layout.fillWidth: true; wrapMode: Text.WordWrap
