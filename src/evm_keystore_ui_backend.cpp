@@ -234,6 +234,17 @@ void EvmKeystoreUiBackend::refreshAccess()
         if (a.toObject().value(QStringLiteral("signer")).toString() != QLatin1String("keystore_module"))
             devices.append(a);
     setDeviceAccountsJson(compact(devices));
+    // One row per wallet for an app's open, whichever signers hold it. A failed read keeps the last.
+    const QJsonObject roster = parseObject(modules().signer_manager_module.roster());
+    if (roster.value(QStringLiteral("ok")).toBool()) {
+        QJsonArray bitcoin;
+        for (const QJsonValue &e : roster.value(QStringLiteral("accounts")).toArray()) {
+            const QString family = e.toObject().value(QStringLiteral("family")).toString();
+            if (family == QLatin1String("bitcoin") || family == QLatin1String("bitcoin_taproot"))
+                bitcoin.append(e);
+        }
+        setBitcoinRosterJson(compact(bitcoin));
+    }
     // Which of them have a database key here: the first open of one sets its password.
     setDeviceWalletsJson(compact(parseObject(modules().keystore_module.device_wallets())
                                      .value(QStringLiteral("wallets")).toArray()));

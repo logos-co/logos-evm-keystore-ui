@@ -16,7 +16,8 @@ LogosDialog {
     property var backend: null
     // `{ handle, requester, kind, bundle_id, lines, asked }`, from the manager.
     property var shown: ({})
-    // Bitcoin wallets the person may pick from: `[{ id, name, family, chain, device?, hasKey?, signer? }]`.
+    // Bitcoin wallets the person may pick from: `[{ id, name, family, chain, device?, hasKey?, signer?,
+    // holders? }]`, one per wallet; `holders` are every signer's id for it, `[{ id, signer, device }]`.
     property var wallets: []
 
     signal decided(string handle, bool approved)
@@ -36,11 +37,16 @@ LogosDialog {
         return w.family === sheet.asked.family && w.chain === sheet.chainOf(sheet.asked.network)
     })
     property string picked: ""
-    // The wallet this open names, or the one picked.
+    // The wallet this open names, or the one picked. An app may name it by any holder's id: then
+    // it opens as that holder, a device's with its data password.
     readonly property var target: {
         var id = sheet.asked.group || sheet.picked
-        var hit = sheet.wallets.filter(function (w) { return w.id === id })
-        return hit.length ? hit[0] : null
+        var hit = sheet.wallets.filter(function (w) {
+            return w.id === id || (w.holders || []).some(function (h) { return h.id === id })
+        })
+        if (!hit.length) return null
+        var holder = (hit[0].holders || []).filter(function (h) { return h.id === id })[0]
+        return holder ? Object.assign({}, hit[0], { id: id, device: holder.device, signer: holder.signer }) : hit[0]
     }
     // A device signs on its own screen: nothing to unlock, and its data has a password of its own.
     readonly property bool onDevice: isOpen && !!(target && target.device)
