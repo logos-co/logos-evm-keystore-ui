@@ -51,6 +51,15 @@ encrypted recovery source. Saving selects the first new account back in the pend
 it does not approve access or unlock it. Cancelling returns to that request without answering it.
 The retired Bitcoin-only import dialog is no longer packaged.
 
+An open request lists each Bitcoin wallet once, from the signer manager's `roster()`, however many
+signers hold it. Its row names the wallet as
+[logos-account-kit](https://github.com/logos-co/logos-account-kit)'s `roster.js` does, then every
+signer holding it. The kit is vendored in `src/qml/accountkit`.
+- A wallet the keystore holds opens under the keystore's id.
+- Otherwise it opens under a device whose data key is already here, else the first device.
+- An app that names a wallet by any holder's id opens it as that holder.
+- From an older manager without `roster()`, the rows are one per holder, as before.
+
 | Operation | Keystore API |
 |---|---|
 | Generate recovery phrase | `create_mnemonic` |

@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import Logos.Controls
 import Logos.Theme
 import "tree.js" as Tree
+import "accountkit/roster.js" as Roster
 
 // The keystore: the only surface that creates, imports, exports or deletes an account. Which
 // node an account belongs to is decided in tree.js, where a table can run it; why the screen
@@ -111,6 +112,26 @@ Item {
             return { id: a.id, name: (a.label || a.id) + " — on " + a.signer, family: a.family, chain: a.chain,
                      signer: a.signer, device: true, hasKey: root.hasDeviceKey(a.signer, a.id) }
         })
+    // An app's open, from the manager's roster: one row per wallet, whichever signers hold it.
+    // It opens under the keystore's id when the keystore holds it, else under a device whose data
+    // key is already here, else the first device. From an older manager, a row per holder as before.
+    readonly property var bitcoinRoster: ready ? j(backend.bitcoinRosterJson, "[]") : []
+    readonly property var openChoices: {
+        if (!root.bitcoinRoster.length) return root.bitcoinWallets.concat(root.deviceBitcoinWallets)
+        var all = root.bitcoinRoster.map(function (e) { return root.openChoice(e) })
+        // The keystore's wallets first, then devices', as before.
+        return all.filter(function (w) { return !w.device }).concat(all.filter(function (w) { return w.device }))
+    }
+    function openChoice(e) {
+        var hs = (e.holders || []).map(function (h) {
+            return { id: h.accountId, signer: h.signer, device: h.transport !== "keystore", name: Roster.holderName(h) }
+        })
+        var keyed = hs.filter(function (h) { return h.device && root.hasDeviceKey(h.signer, h.id) })
+        var home = hs.filter(function (h) { return !h.device })[0] || keyed[0] || hs[0] || { id: e.key, device: false }
+        return { id: home.id, family: e.family, chain: e.chain, signer: home.signer, device: home.device,
+                 hasKey: keyed.length > 0, holders: hs,
+                 name: Roster.title(e) + " — " + hs.map(function (h) { return h.name }).join(", ") }
+    }
     readonly property var bitcoinWallets: root.groups.filter(function (g) { return !!g.family })
         .map(function (g) {
             return { id: g.id, name: root.walletNameOf(g.id) || g.id, family: g.family, chain: g.chain }
@@ -676,7 +697,7 @@ Item {
         id: accessSheet
         backend: root.backend
         shown: root.accessShown
-        wallets: root.bitcoinWallets.concat(root.deviceBitcoinWallets)
+        wallets: root.openChoices
         onDecided: function (handle, approved) { root.answerIntent(handle, approved, approved ? "" : "rejected") }
         onDeferred: function (handle) { root.answerIntent(handle, false, "cancelled") }
         onAddWallet: function (family, chain) {
