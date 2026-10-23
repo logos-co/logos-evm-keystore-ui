@@ -68,7 +68,7 @@ LogosDialog {
     function chosen(key) { return selected.some(function(r) { return r.key === key }) }
     function toggle(row, checked) {
         var copy = selected.slice(), key = rowKey(row)
-        if (checked && !chosen(key)) { var r = Object.assign({}, row); r.key = key; copy.push(r) }
+        if (checked && !chosen(key)) { let r = Object.assign({}, row); r.key = key; copy.push(r) }
         if (!checked) copy = copy.filter(function(r) { return r.key !== key })
         selected = copy
     }

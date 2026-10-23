@@ -68,7 +68,7 @@ LogosDialog {
             text: "Show descriptor"
             onClicked: logos.watch(sheet.backend.walletDescriptors(sheet.group.id), function (json) {
                 try {
-                    var d = JSON.parse(json || "{}")
+                    const d = JSON.parse(json || "{}")
                     sheet.external = d.external || ""
                     sheet.internal = d.internal || ""
                 } catch (e) {}

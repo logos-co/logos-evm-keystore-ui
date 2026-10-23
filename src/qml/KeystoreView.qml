@@ -620,7 +620,7 @@ Item {
                                     Layout.fillWidth: true
                                     font.bold: true
                                     textFormat: Text.PlainText
-                                    text: root.seedNameFor(seedBranch.bundle.nodes[0].group.seedId)
+                                    text: root.seedNameFor((seedBranch.bundle.nodes[0].group || {}).seedId)
                                           || root.walletNameOf(seedBranch.bundle.nodes[0].id)
                                           || (seedBranch.bundle.linked ? "Recovery source " + (seedBranch.index + 1) : "Recovery source — not yet linked")
                                 }

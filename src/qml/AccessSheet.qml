@@ -55,7 +55,10 @@ LogosDialog {
     function pickWallet(group) {
         picked = group
         for (var i = 0; i < walletRepeater.count; ++i)
-            if (sheet.choices[i].id === group) walletRepeater.itemAt(i).checked = true
+            if (sheet.choices[i].id === group) {
+                const box = walletRepeater.itemAt(i) as LogosRadioButton
+                box.checked = true
+            }
     }
 
     anchors.centerIn: parent
