@@ -418,6 +418,8 @@ void EvmKeystoreUiBackend::loadGroups()
     setGroupsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("groups")))
                              : QStringLiteral("[]"));
     setLockedWallets(groupsRead ? parseObject(groups).value(QStringLiteral("lockedWallets")).toInt() : 0);
+    setLockedSeedsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("lockedSeeds")))
+                                  : QStringLiteral("[]"));
 
     const QString provenance = modules().keystore_module.get_provenance();
     setProvenanceJson(read(QStringLiteral("provenance"), provenance, QStringLiteral("provenance"))
