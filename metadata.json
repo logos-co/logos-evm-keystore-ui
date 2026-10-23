@@ -14,6 +14,9 @@
     { "name": "keystore_module", "version": "~0.1.0" },
     { "name": "signer_manager_module", "version": "~0.1.0" }
   ],
+  "uses": [
+    { "intent": "wallets.unlock", "cardinality": "single" }
+  ],
   "provides": [
     { "intent": "evm.accounts.manage", "handoff": true },
     {

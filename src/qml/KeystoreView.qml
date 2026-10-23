@@ -85,6 +85,7 @@ Item {
     readonly property var accounts: ready ? j(backend.accountsJson, "[]") : []
     readonly property var labels: ready ? j(backend.labelsJson, "{}") : ({})
     readonly property var groups: ready ? j(backend.groupsJson, "[]") : []
+    readonly property int lockedWallets: ready ? backend.lockedWallets : 0
     readonly property var provenance: ready ? j(backend.provenanceJson, "{}") : ({})
     // What names each wallet, read from the keystore's own names document — so a wallet whose
     // record is gone keeps its name, and a torn file refuses rather than reading as "unnamed".
@@ -487,6 +488,27 @@ Item {
             wrapMode: Text.WordWrap
             color: Theme.palette.error
             text: root.ready ? root.backend.lastError : ""
+        }
+
+        // A locked wallet lists none of its files, so say it is here rather than look empty.
+        LogosNotice {
+            id: lockedNotice
+            objectName: "lockedNotice"
+            Layout.fillWidth: true
+            shown: root.lockedWallets > 0
+            visible: shown
+            title: root.lockedWallets === 1 ? "1 wallet is locked" : root.lockedWallets + " wallets are locked"
+            message: root.lockedWallets === 1 ? "Its accounts show here once you unlock it in the Signer app."
+                                              : "Their accounts show here once you unlock them in the Signer app."
+            actions: [
+                LogosButton {
+                    objectName: "lockedUnlockButton"
+                    text: "Unlock"
+                    onClicked: logos.request("wallets.unlock", ({}), function (res) {
+                        if (res.ok) root.backend.refresh()
+                    })
+                }
+            ]
         }
 
         // ── Kept recovery phrases: off unless the person chose to keep one ──────────────

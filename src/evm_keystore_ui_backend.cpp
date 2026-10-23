@@ -414,9 +414,10 @@ void EvmKeystoreUiBackend::loadGroups()
     // A refused read clears what it feeds. Leaving the previous answer on screen would say
     // "no wallets" or "these wallets" with the same confidence the keystore just withdrew.
     const QString groups = modules().keystore_module.list_groups();
-    setGroupsJson(read(QStringLiteral("groups"), groups, QStringLiteral("wallets"))
-                      ? compact(parseObject(groups).value(QStringLiteral("groups")))
-                      : QStringLiteral("[]"));
+    const bool groupsRead = read(QStringLiteral("groups"), groups, QStringLiteral("wallets"));
+    setGroupsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("groups")))
+                             : QStringLiteral("[]"));
+    setLockedWallets(groupsRead ? parseObject(groups).value(QStringLiteral("lockedWallets")).toInt() : 0);
 
     const QString provenance = modules().keystore_module.get_provenance();
     setProvenanceJson(read(QStringLiteral("provenance"), provenance, QStringLiteral("provenance"))
