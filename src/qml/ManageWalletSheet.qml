@@ -116,7 +116,7 @@ LogosDialog {
                 objectName: "walletNameField"
                 Layout.fillWidth: true
                 textInput.maximumLength: 40
-                placeholderText: "Name this wallet"
+                placeholderText: "Name this account"
             }
             LogosButton {
                 objectName: "walletNameConfirm"

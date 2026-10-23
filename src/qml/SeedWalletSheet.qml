@@ -86,7 +86,7 @@ LogosDialog {
         LogosTextField {
             id: walletName; objectName: "seedWalletName"
             Layout.fillWidth: true
-            placeholderText: "Wallet name (optional)"
+            placeholderText: "Account name (optional)"
         }
         LogosTextField {
             id: walletPw; objectName: "seedWalletPassword"

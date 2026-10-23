@@ -31,6 +31,8 @@ LogosDialog {
     property bool showGenerated: true
     property var rows: []
     property var selected: []
+    // Each selected account's own name, by its row key: kept apart so typing doesn't rebuild the rows.
+    property var names: ({})
     property int page: 0
     property string notice: ""
     signal importKey()
@@ -86,7 +88,9 @@ LogosDialog {
     function refreshPage() { if (step === 1) { page = 0; preview() } }
     function saveSelection() {
         notice = ""; working = true
-        var p = { source: source(), selected: selected, name: groupName.text.trim(), password: password.text,
+        // Each account its own name, empty unless given; the wallet's, for a new phrase only.
+        var named = selected.map(function(r) { return Object.assign({}, r, { name: (names[r.key] || "").trim() }) })
+        var p = { source: source(), selected: named, walletName: sourceGroup ? "" : groupName.text.trim(), password: password.text,
                   keepRecovery: keep.checked && !keptId, origin: mode === "create" ? "created" : "restored",
                   birthday: asksBirthday ? birthday.text.trim() : "" }
         logos.watch(backend.saveAccounts(JSON.stringify(p)), function(reply) {
@@ -103,7 +107,7 @@ LogosDialog {
         p = {}
     }
     onOpened: {
-        clearSecrets(); rows = []; selected = []; page = 0; notice = ""; working = false
+        clearSecrets(); rows = []; selected = []; names = ({}); page = 0; notice = ""; working = false
         step = mode === "import" || mode === "request" ? -1 : 0
         coin.currentIndex = presetFamily ? 1 : 0; scriptType.currentIndex = presetFamily === "bitcoin_taproot" ? 1 : 0; testnet.checked = presetChain === "test"
         evmAccount.text = "0"; groupName.text = ""; birthday.text = ""; keep.checked = false; advanced.checked = false
@@ -111,7 +115,7 @@ LogosDialog {
         wordCountPicker.currentIndex = 0
         if (mode === "create") generatePhrase()
     }
-    onClosed: { generation++; working = false; clearSecrets(); rows = []; selected = []; sourceGroup = ""; keptId = ""; needsPassphrase = false; notice = ""; requestHandle = ""; presetFamily = ""; presetChain = "" }
+    onClosed: { generation++; working = false; clearSecrets(); rows = []; selected = []; names = ({}); sourceGroup = ""; keptId = ""; needsPassphrase = false; notice = ""; requestHandle = ""; presetFamily = ""; presetChain = "" }
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
         LogosText {
@@ -312,12 +316,26 @@ LogosDialog {
                 }
                 ColumnLayout {
                     visible: sheet.step === 2; Layout.fillWidth: true
-                    LogosTextField { id: groupName; objectName: "flowName"; Layout.fillWidth: true; placeholderText: "Group name (optional)"; textInput.maximumLength: 40 }
+                    LogosTextField {
+                        id: groupName; objectName: "flowName"; Layout.fillWidth: true
+                        visible: !sheet.sourceGroup
+                        placeholderText: "Wallet name (optional)"; textInput.maximumLength: 40
+                    }
                     Repeater {
                         model: sheet.selected
-                        delegate: LogosText {
-                            Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText
-                            text: (modelData.family === "evm" ? "Ethereum keystore JSON" : "Bitcoin account file") + " · " + modelData.path + "\n" + modelData.address
+                        delegate: ColumnLayout {
+                            Layout.fillWidth: true
+                            LogosText {
+                                Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText
+                                text: (modelData.family === "evm" ? "Ethereum keystore JSON" : "Bitcoin account file") + " · " + modelData.path + "\n" + modelData.address
+                            }
+                            LogosTextField {
+                                objectName: "flowAccountName_" + index
+                                Layout.fillWidth: true
+                                placeholderText: "Account name (optional)"; textInput.maximumLength: 40
+                                text: sheet.names[modelData.key] || ""
+                                onTextChanged: sheet.names[modelData.key] = text
+                            }
                         }
                     }
                     LogosTextField { id: password; objectName: "flowPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Password for the new files" }

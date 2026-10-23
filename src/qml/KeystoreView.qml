@@ -264,6 +264,20 @@ Item {
     }
     // The stored name, for the field that edits it — never the ordinal standing in for one.
     function walletNameOf(id) { return Tree.nameOf(root.groups, root.walletNames, id) }
+    // A phrase's wallet name, over all its account files. An older keys app wrote it onto each
+    // file instead: then it is the one name they share.
+    function seedNameFor(seedId) {
+        if (!seedId) return ""
+        var files = root.groups.filter(function (g) { return g.seedId === seedId })
+        for (var i = 0; i < files.length; ++i)
+            if (files[i].walletName) return files[i].walletName
+        var names = []
+        files.forEach(function (g) {
+            var n = root.walletNameOf(g.id)
+            if (n && names.indexOf(n) < 0) names.push(n)
+        })
+        return names.length === 1 ? names[0] : ""
+    }
     function walletQualifierOf(id) {
         return Tree.walletTitle(root.groups, root.keyFrames, root.walletNames, id, root.nameFrames).qualifier
     }
@@ -301,7 +315,9 @@ Item {
     // ── What each kind of node says about itself ───────────────────────────────────
     function nodeTitle(n) {
         if (n.kind === "wallet" && n.group.seedId) {
-            var label = root.walletNameOf(n.id)
+            // The account's own name only: the wallet's is over it.
+            var own = root.walletNameOf(n.id)
+            var label = own !== root.seedNameFor(n.group.seedId) ? own : ""
             var family = n.group.family ? "Bitcoin" : "Ethereum"
             var index = n.group.family ? parseInt(n.group.pathPrefix.split("/").pop())
                         : n.addresses.length === 1 ? (root.provFor(n.addresses[0]) || {}).index : undefined
@@ -604,7 +620,8 @@ Item {
                                     Layout.fillWidth: true
                                     font.bold: true
                                     textFormat: Text.PlainText
-                                    text: root.walletNameOf(seedBranch.bundle.nodes[0].id)
+                                    text: root.seedNameFor(seedBranch.bundle.nodes[0].group.seedId)
+                                          || root.walletNameOf(seedBranch.bundle.nodes[0].id)
                                           || (seedBranch.bundle.linked ? "Recovery source " + (seedBranch.index + 1) : "Recovery source — not yet linked")
                                 }
                                 LogosButton {

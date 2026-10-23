@@ -199,14 +199,15 @@
       "inputs": {
         "logos-module-builder": [
           "logos-module-builder"
-        ]
+        ],
+        "logos-signer-interface": "logos-signer-interface"
       },
       "locked": {
-        "lastModified": 1792004202,
-        "narHash": "sha256-PUBaws3QZ3RA5LxLJmQox/O6PKV+7RS1vVJ9F80dWDw=",
+        "lastModified": 1792783511,
+        "narHash": "sha256-WBmydxn6SV7cLAc5PPP5oJ7nHljLQFeutGmhiwSRybg=",
         "owner": "logos-co",
         "repo": "logos-evm-keystore-module",
-        "rev": "40633a919d0299eca5c4511971191c8a3dd173c4",
+        "rev": "c74bb4f96e9490f19190a99e3021334e1b50afa3",
         "type": "github"
       },
       "original": {
@@ -10890,6 +10891,23 @@
     "logos-signer-interface": {
       "flake": false,
       "locked": {
+        "lastModified": 1792697033,
+        "narHash": "sha256-0854jn02W19omtltBWLKM6gNIbogozUCCp4dFIQoQX8=",
+        "owner": "logos-co",
+        "repo": "logos-signer-interface",
+        "rev": "ca091a9330d455a5b60b80537e34dc535d1e6503",
+        "type": "github"
+      },
+      "original": {
+        "owner": "logos-co",
+        "repo": "logos-signer-interface",
+        "rev": "ca091a9330d455a5b60b80537e34dc535d1e6503",
+        "type": "github"
+      }
+    },
+    "logos-signer-interface_2": {
+      "flake": false,
+      "locked": {
         "lastModified": 1791601039,
         "narHash": "sha256-VQjc0vyzqs11hVEObM3mtNrydDYP8zDke0+PFtL6AT0=",
         "owner": "logos-co",
@@ -18041,7 +18059,7 @@
         "logos-module-builder": [
           "logos-module-builder"
         ],
-        "logos-signer-interface": "logos-signer-interface"
+        "logos-signer-interface": "logos-signer-interface_2"
       },
       "locked": {
         "lastModified": 1792171691,
