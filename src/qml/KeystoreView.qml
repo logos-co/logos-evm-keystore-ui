@@ -599,7 +599,8 @@ Item {
                 objectName: "accountsEmpty"
                 anchors.centerIn: parent
                 visible: root.nodes.length === 0 && !root.treeReadRefused
-                text: "No keystore files yet. Create or import accounts to get started."
+                text: root.lockedWallets > 0 ? "No unlocked keystore files. Unlock a wallet, or create or import accounts."
+                                             : "No keystore files yet. Create or import accounts to get started."
                 color: Theme.palette.textSecondary
             }
             LogosText {
