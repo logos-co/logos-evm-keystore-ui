@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
+import "accountkit" as Accounts
 
 LogosDialog {
     id: sheet
@@ -227,10 +228,9 @@ LogosDialog {
                         visible: sheet.mode === "create" && !sheet.showGenerated
                         placeholderText: "Confirm words 1, 5 and " + sheet.wordCount
                     }
-                    LogosTextField {
+                    Accounts.PhraseGrid {
                         id: words; objectName: "flowWords"; Layout.fillWidth: true
                         visible: sheet.mode !== "create" && !sheet.keptId
-                        echoMode: TextInput.Password; placeholderText: "Recovery phrase"
                     }
                     LogosTextField {
                         id: phrasePw; objectName: "flowPhrasePassword"; Layout.fillWidth: true

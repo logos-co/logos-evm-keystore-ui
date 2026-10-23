@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
+import "accountkit" as Accounts
 
 LogosDialog {
     id: sheet
@@ -40,12 +41,10 @@ LogosDialog {
             text: sheet.keptId ? "Unlock the saved recovery phrase. Its words stay inside the Keystore."
                                : "Enter the recovery phrase for this seed group. It will be checked against the existing wallet and will not be saved."
         }
-        LogosTextField {
+        Accounts.PhraseGrid {
             id: words; objectName: "seedWords"
             visible: !sheet.keptId
             Layout.fillWidth: true
-            echoMode: TextInput.Password
-            placeholderText: "Recovery phrase"
         }
         LogosTextField {
             id: phrasePw; objectName: "seedPhrasePassword"
