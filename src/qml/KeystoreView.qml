@@ -505,7 +505,7 @@ Item {
                     objectName: "lockedUnlockButton"
                     text: "Unlock"
                     // This keystore's wallets only: the Signer app takes them one after another.
-                    onClicked: logos.request("wallets.unlock", ({ seeds: root.j(root.backend.lockedSeedsJson, "[]") }), function (res) {
+                    onClicked: logos.request("wallets.unlock", ({ seeds: root.j(root.backend.lockedSeedsJson, "[]"), signer: "keystore_module" }), function (res) {
                         if (res.ok) root.backend.refresh()
                     })
                 }
