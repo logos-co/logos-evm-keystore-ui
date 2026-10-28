@@ -414,9 +414,12 @@ void EvmKeystoreUiBackend::loadGroups()
     // A refused read clears what it feeds. Leaving the previous answer on screen would say
     // "no wallets" or "these wallets" with the same confidence the keystore just withdrew.
     const QString groups = modules().keystore_module.list_groups();
-    setGroupsJson(read(QStringLiteral("groups"), groups, QStringLiteral("wallets"))
-                      ? compact(parseObject(groups).value(QStringLiteral("groups")))
-                      : QStringLiteral("[]"));
+    const bool groupsRead = read(QStringLiteral("groups"), groups, QStringLiteral("wallets"));
+    setGroupsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("groups")))
+                             : QStringLiteral("[]"));
+    setLockedWallets(groupsRead ? parseObject(groups).value(QStringLiteral("lockedWallets")).toInt() : 0);
+    setLockedSeedsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("lockedSeeds")))
+                                  : QStringLiteral("[]"));
 
     const QString provenance = modules().keystore_module.get_provenance();
     setProvenanceJson(read(QStringLiteral("provenance"), provenance, QStringLiteral("provenance"))
@@ -514,7 +517,8 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
     const bool keep = p.take(QStringLiteral("keepRecovery")).toBool();
     auto password = p.value(QStringLiteral("password")).toString();
     auto source = p.value(QStringLiteral("source")).toObject();
-    const auto name = p.value(QStringLiteral("name")).toString().trimmed();
+    // The wallet's name, kept for a new phrase; each account file has its own, empty by default.
+    const auto walletName = p.value(QStringLiteral("walletName")).toString().trimmed();
     // A restored Bitcoin wallet's first day, if the person gave one. A created one starts today,
     // and so do its accounts read back from the vault it was just kept in, which the keystore
     // calls restored: a kept phrase is older than the wallet, except this once.
@@ -562,7 +566,8 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         auto request = source;
         request["password"] = password;
         request["storage"] = "plain";
-        request["groupLabel"] = name; request["label"] = name;
+        const auto name = row.value(QStringLiteral("name")).toString().trimmed();
+        request["groupLabel"] = name; request["label"] = name; request["walletName"] = walletName;
         request["family"] = row.value("family"); request["chain"] = row.value("chain");
         request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
         request["accountIndex"] = row.value("index");

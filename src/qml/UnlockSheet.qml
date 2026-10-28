@@ -28,7 +28,8 @@ LogosDialog {
         if (presetApp !== "") terms.defaultApps(presetApp)
         for (var i = 0; i < accountRepeater.count; ++i) {
             var hit = presetAccount !== "" && String(accounts[i].id).toLowerCase() === presetAccount.toLowerCase()
-            accountRepeater.itemAt(i).checked = hit
+            const box = accountRepeater.itemAt(i) as LogosRadioButton
+            box.checked = hit
             if (hit) picked = accounts[i].id
         }
     }

@@ -85,6 +85,7 @@ Item {
     readonly property var accounts: ready ? j(backend.accountsJson, "[]") : []
     readonly property var labels: ready ? j(backend.labelsJson, "{}") : ({})
     readonly property var groups: ready ? j(backend.groupsJson, "[]") : []
+    readonly property int lockedWallets: ready ? backend.lockedWallets : 0
     readonly property var provenance: ready ? j(backend.provenanceJson, "{}") : ({})
     // What names each wallet, read from the keystore's own names document — so a wallet whose
     // record is gone keeps its name, and a torn file refuses rather than reading as "unnamed".
@@ -264,6 +265,20 @@ Item {
     }
     // The stored name, for the field that edits it — never the ordinal standing in for one.
     function walletNameOf(id) { return Tree.nameOf(root.groups, root.walletNames, id) }
+    // A phrase's wallet name, over all its account files. An older keys app wrote it onto each
+    // file instead: then it is the one name they share.
+    function seedNameFor(seedId) {
+        if (!seedId) return ""
+        var files = root.groups.filter(function (g) { return g.seedId === seedId })
+        for (var i = 0; i < files.length; ++i)
+            if (files[i].walletName) return files[i].walletName
+        var names = []
+        files.forEach(function (g) {
+            var n = root.walletNameOf(g.id)
+            if (n && names.indexOf(n) < 0) names.push(n)
+        })
+        return names.length === 1 ? names[0] : ""
+    }
     function walletQualifierOf(id) {
         return Tree.walletTitle(root.groups, root.keyFrames, root.walletNames, id, root.nameFrames).qualifier
     }
@@ -301,7 +316,9 @@ Item {
     // ── What each kind of node says about itself ───────────────────────────────────
     function nodeTitle(n) {
         if (n.kind === "wallet" && n.group.seedId) {
-            var label = root.walletNameOf(n.id)
+            // The account's own name only: the wallet's is over it.
+            var own = root.walletNameOf(n.id)
+            var label = own !== root.seedNameFor(n.group.seedId) ? own : ""
             var family = n.group.family ? "Bitcoin" : "Ethereum"
             var index = n.group.family ? parseInt(n.group.pathPrefix.split("/").pop())
                         : n.addresses.length === 1 ? (root.provFor(n.addresses[0]) || {}).index : undefined
@@ -473,6 +490,28 @@ Item {
             text: root.ready ? root.backend.lastError : ""
         }
 
+        // A locked wallet lists none of its files, so say it is here rather than look empty.
+        LogosNotice {
+            id: lockedNotice
+            objectName: "lockedNotice"
+            Layout.fillWidth: true
+            shown: root.lockedWallets > 0
+            visible: shown
+            title: root.lockedWallets === 1 ? "1 wallet is locked" : root.lockedWallets + " wallets are locked"
+            message: root.lockedWallets === 1 ? "Its accounts show here once you unlock it in the Signer app."
+                                              : "Their accounts show here once you unlock them in the Signer app."
+            actions: [
+                LogosButton {
+                    objectName: "lockedUnlockButton"
+                    text: "Unlock"
+                    // This keystore's wallets only: the Signer app takes them one after another.
+                    onClicked: logos.request("wallets.unlock", ({ seeds: root.j(root.backend.lockedSeedsJson, "[]"), signer: "keystore_module" }), function (res) {
+                        if (res.ok) root.backend.refresh()
+                    })
+                }
+            ]
+        }
+
         // ── Kept recovery phrases: off unless the person chose to keep one ──────────────
         ColumnLayout {
             objectName: "keptPhrases"
@@ -561,7 +600,8 @@ Item {
                 objectName: "accountsEmpty"
                 anchors.centerIn: parent
                 visible: root.nodes.length === 0 && !root.treeReadRefused
-                text: "No keystore files yet. Create or import accounts to get started."
+                text: root.lockedWallets > 0 ? "No unlocked keystore files. Unlock a wallet, or create or import accounts."
+                                             : "No keystore files yet. Create or import accounts to get started."
                 color: Theme.palette.textSecondary
             }
             LogosText {
@@ -604,7 +644,8 @@ Item {
                                     Layout.fillWidth: true
                                     font.bold: true
                                     textFormat: Text.PlainText
-                                    text: root.walletNameOf(seedBranch.bundle.nodes[0].id)
+                                    text: root.seedNameFor((seedBranch.bundle.nodes[0].group || {}).seedId)
+                                          || root.walletNameOf(seedBranch.bundle.nodes[0].id)
                                           || (seedBranch.bundle.linked ? "Recovery source " + (seedBranch.index + 1) : "Recovery source — not yet linked")
                                 }
                                 LogosButton {
