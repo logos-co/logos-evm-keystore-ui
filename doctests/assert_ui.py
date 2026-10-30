@@ -243,7 +243,7 @@ staged = block(code(text("ManageWalletSheet.qml")), 'objectName: "forgetDerivati
 check("a staged key claims no refusal about unrelated accounts",
       "unrelated" in staged, False)
 check("and states the one the keystore does apply",
-      "removing the wallet itself is refused" in staged, True)
+      "removing the account file itself is refused" in staged, True)
 
 print("0d) the flat list is gone and the tree replaced it")
 check("no flat account list", "accountList" in view, False)
@@ -278,7 +278,7 @@ for fragment in [
     "writing a recovery phrase down does not back them up",
     "only backup is a vault file you export and keep yourself",
     "it does not need the",
-    "cannot add accounts, but it opens the whole wallet",
+    "cannot add accounts, but it opens the whole account file",
     "not the keystore's configured custodian",
     "starts or ends with a space, which counts as part of it",
 ]:

@@ -31,8 +31,8 @@ LogosDialog {
             color: Theme.palette.textSecondary
             text: !sheet.kept ? ""
                   : (sheet.kept.groups || []).length === 0
-                    ? "No wallet here was made from it any more. It is still kept until you forget it."
-                    : "Used by " + sheet.kept.groups.length + " wallet(s) here."
+                    ? "No account file here was made from it any more. It is still kept until you forget it."
+                    : "Used by " + sheet.kept.groups.length + " account file(s) here."
         }
         LogosText {
             objectName: "phraseShowRisk"

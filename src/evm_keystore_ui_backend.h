@@ -57,6 +57,7 @@ public:
 
     bool setLabel(QString address, QString label, QString password) override;
     bool setWalletName(QString group, QString name, QString address, QString password) override;
+    bool setSeedWalletName(QString group, QString name, QString address, QString password) override;
     bool changePassword(QString address, QString oldPassword, QString newPassword) override;
 
     QString importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
