@@ -279,6 +279,19 @@ Item {
         })
         return names.length === 1 ? names[0] : ""
     }
+    // The header over a recovery phrase's account files: its wallet name, else its position.
+    function seedTitleOf(bundle, index) {
+        if (!bundle || !bundle.nodes.length) return ""
+        return root.seedNameFor((bundle.nodes[0].group || {}).seedId)
+               || root.walletNameOf(bundle.nodes[0].id)
+               || (bundle.linked ? "Recovery source " + (index + 1) : "Recovery source — not yet linked")
+    }
+    function seedTitleForGroup(groupId) {
+        for (var i = 0; i < root.seedNodes.length; ++i)
+            if (root.seedNodes[i].nodes.some(function (n) { return n.group && n.group.id === groupId }))
+                return root.seedTitleOf(root.seedNodes[i], i)
+        return ""
+    }
     function walletQualifierOf(id) {
         return Tree.walletTitle(root.groups, root.keyFrames, root.walletNames, id, root.nameFrames).qualifier
     }
@@ -298,7 +311,8 @@ Item {
         var p = provFor(a)
         if (!p) return "Where this account came from was not recorded, so nothing here can say whether a phrase covers it."
         if (p.origin === "derived") {
-            var from = walletTitleFor(p.group)
+            var g = root.groups.find(function (x) { return x.id === p.group })
+            var from = (g && g.seedId && root.seedTitleForGroup(p.group)) || walletTitleFor(p.group)
             var who = from.length > 0 ? from
                     : (root.groupsKnown ? "a wallet not listed here"
                                         : "a wallet the list could not be read to name")
@@ -528,8 +542,11 @@ Item {
                         Layout.fillWidth: true
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
-                        text: "Phrase " + String(modelData.id).substring(0, 10) + "… — used by "
-                              + (modelData.groups || []).length + " wallet(s)"
+                        text: ((modelData.groups || []).length === 0
+                               ? "A recovery phrase no account file uses any more"
+                               : "Recovery phrase of " + (root.seedTitleForGroup(modelData.groups[0])
+                                                          || "a wallet not listed here")
+                                 + " — used by " + modelData.groups.length + " account file(s)")
                               + (modelData.staged ? ", left by an interrupted write" : "")
                     }
                     LogosButton {
@@ -644,9 +661,18 @@ Item {
                                     Layout.fillWidth: true
                                     font.bold: true
                                     textFormat: Text.PlainText
-                                    text: root.seedNameFor((seedBranch.bundle.nodes[0].group || {}).seedId)
-                                          || root.walletNameOf(seedBranch.bundle.nodes[0].id)
-                                          || (seedBranch.bundle.linked ? "Recovery source " + (seedBranch.index + 1) : "Recovery source — not yet linked")
+                                    text: root.seedTitleOf(seedBranch.bundle, seedBranch.index)
+                                }
+                                LogosButton {
+                                    objectName: "renameSeedWallet_" + seedBranch.index
+                                    visible: seedBranch.bundle.linked
+                                    text: "Rename…"
+                                    enabled: root.custodian
+                                    onClicked: {
+                                        walletNameSheet.bundle = seedBranch.bundle
+                                        walletNameSheet.shownTitle = root.seedTitleOf(seedBranch.bundle, seedBranch.index)
+                                        walletNameSheet.open()
+                                    }
                                 }
                                 LogosButton {
                                     objectName: "addSeedWallet_" + seedBranch.index
@@ -705,10 +731,14 @@ Item {
                                     onManageWalletRequested: {
                                         if (modelData.group && modelData.group.family) {
                                             bitcoinWalletSheet.group = modelData.group
+                                            bitcoinWalletSheet.rowTitle = root.nodeTitle(modelData)
                                             bitcoinWalletSheet.open()
                                             return
                                         }
                                         walletSheet.group = modelData.group
+                                        walletSheet.rowTitle = root.nodeTitle(modelData)
+                                        walletSheet.seedLinked = !!(modelData.group && modelData.group.seedId)
+                                        walletSheet.phraseKept = seedBranch.bundle.linked && root.keptForSeed(seedBranch.bundle) !== ""
                                         walletSheet.stranded = root.isKeyFrame(modelData)
                                         walletSheet.recordKnown = modelData.kind !== "unreadKey"
                                         walletSheet.addresses = modelData.addresses
@@ -763,6 +793,7 @@ Item {
     // ── Bitcoin wallets and kept phrases ───────────────────────────────────────────
     BitcoinWalletSheet { id: bitcoinWalletSheet; backend: root.backend; view: root }
     KeptPhraseSheet { id: keptPhraseSheet; backend: root.backend }
+    WalletNameSheet { id: walletNameSheet; backend: root.backend; view: root }
     ManageWalletSheet {
         id: walletSheet
         backend: root.backend
@@ -783,7 +814,7 @@ Item {
     LogosWarningDialog {
         id: removeWalletDialog
         objectName: "removeWalletDialog"
-        title: "Remove this wallet?"
+        title: "Remove this account file?"
         accentColor: Theme.palette.error
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
@@ -809,7 +840,7 @@ Item {
                 objectName: "removeWalletLost"
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: "What goes is this wallet's name, and the record of where its accounts "
+                text: "What goes is this account file's name, and the record of where its accounts "
                       + "came from — the path it derives at, and how far along that path it "
                       + "had got."
             }
@@ -819,7 +850,7 @@ Item {
                 wrapMode: Text.WordWrap
                 color: Theme.palette.textSecondary
                 text: "Nothing signable is affected, because there is nothing here to sign "
-                      + "with: this wallet keeps no derivation key and holds no accounts. That "
+                      + "with: this account file keeps no derivation key and holds no accounts. That "
                       + "is also why no password is asked for — there is no secret to check "
                       + "one against."
             }
@@ -829,12 +860,12 @@ Item {
                 wrapMode: Text.WordWrap
                 color: Theme.palette.warning
                 text: "Importing the recovery phrase again does not bring this row back. It "
-                      + "makes a new wallet, in a new position and with no name."
+                      + "makes a new account file, in a new position and with no name."
             }
             LogosCheckbox {
                 id: removeAck
                 objectName: "removeWalletAck"
-                text: "I want this wallet removed"
+                text: "I want this account file removed"
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -842,7 +873,7 @@ Item {
                 Item { Layout.fillWidth: true }
                 LogosButton {
                     objectName: "removeWalletConfirm"
-                    text: "Remove this wallet"
+                    text: "Remove this account file"
                     enabled: removeAck.checked && removeWalletDialog.group !== null
                     onClicked: logos.watch(root.backend.removeWallet(removeWalletDialog.group.id),
                         function (good) { if (good) removeWalletDialog.close() })

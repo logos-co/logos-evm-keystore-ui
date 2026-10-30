@@ -804,6 +804,24 @@ bool EvmKeystoreUiBackend::setWalletName(QString group, QString name, QString ad
     return good;
 }
 
+bool EvmKeystoreUiBackend::setSeedWalletName(QString group, QString name, QString address,
+                                             QString password)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("group")] = group;
+    p[QStringLiteral("label")] = name;
+    if (!address.isEmpty())
+        p[QStringLiteral("address")] = address;
+    if (!password.isEmpty())
+        p[QStringLiteral("password")] = password;
+    const bool good = ok(modules().keystore_module.set_wallet_name(params(p)),
+                         QStringLiteral("rename wallet"));
+    if (good)
+        loadGroups();
+    return good;
+}
+
 bool EvmKeystoreUiBackend::changePassword(QString address, QString oldPassword, QString newPassword)
 {
     setLastError(QString());
