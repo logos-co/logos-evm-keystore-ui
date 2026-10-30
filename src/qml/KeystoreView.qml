@@ -86,6 +86,8 @@ Item {
     readonly property var labels: ready ? j(backend.labelsJson, "{}") : ({})
     readonly property var groups: ready ? j(backend.groupsJson, "[]") : []
     readonly property int lockedWallets: ready ? backend.lockedWallets : 0
+    // Older builds' wallets the Signer app can't open until they are added again.
+    readonly property var addAgain: ready ? j(backend.addAgainJson, "[]") : []
     readonly property var provenance: ready ? j(backend.provenanceJson, "{}") : ({})
     // What names each wallet, read from the keystore's own names document — so a wallet whose
     // record is gone keeps its name, and a torn file refuses rather than reading as "unnamed".
@@ -193,7 +195,7 @@ Item {
                                             || reads.derivationKeys === false
 
     readonly property var nodes: !ready ? []
-        : Tree.treeOf(accounts, provenance, groups, derivationKeys, reads, walletNames)
+        : Tree.treeOf(accounts, provenance, groups, derivationKeys, reads, walletNames, addAgain)
 
     readonly property var seedNodes: Tree.seedGroupsOf(nodes)
 
@@ -214,6 +216,25 @@ Item {
         for (var k in root.collapsed) next[k] = root.collapsed[k]
         next[id] = !next[id]
         root.collapsed = next
+    }
+    // A wallet that needs its phrase again shows its account files only when asked.
+    function filesShown(bundle) {
+        var k = "files:" + bundle.id
+        return root.collapsed[k] === undefined ? !bundle.needsPhrase : root.collapsed[k] !== true
+    }
+    function toggleFiles(bundle) {
+        var next = {}
+        for (var k in root.collapsed) next[k] = root.collapsed[k]
+        next["files:" + bundle.id] = root.filesShown(bundle)
+        root.collapsed = next
+    }
+    function openAddAgain(bundle) {
+        var g = bundle.nodes[0].group
+        addAgainSheet.group = g.id
+        addAgainSheet.walletName = root.seedNameFor(g.seedId) || root.walletNameOf(g.id)
+        addAgainSheet.keptId = root.keptForSeed(bundle)
+        addAgainSheet.needsPassphrase = bundle.nodes.some(function (n) { return n.group.usedPassphrase === true })
+        addAgainSheet.open()
     }
 
     // Asked of the key DIRECTORY, not of the wallet record: `derivable` is a promise about
@@ -340,6 +361,7 @@ Item {
         }
         if (n.kind === "wallet" || n.kind === "nameOnly" || root.isKeyFrame(n))
             return walletTitleOf(n.group)
+        if (n.kind === "notAdded") return "Added before wallets could be locked"
         if (n.kind === "imported") return "Imported"
         if (n.kind === "random") return "Created here, not from a phrase"
         if (n.kind === "orphan")
@@ -366,6 +388,9 @@ Item {
                  + "it still opens a whole wallet. Deleting it leaves every account you "
                  + "already have untouched: they keep signing, they simply stop being "
                  + "extendable without the recovery phrase."
+        if (n.kind === "notAdded")
+            return "These keys can't sign until each is added to the Signer app, and until then "
+                 + "they are stored unencrypted on this computer. Adding one asks for its password."
         if (n.kind === "imported")
             return "These arrived as a private key or a vault file, so no recovery phrase "
                  + "here covers them. Their only backup is a vault file you export and keep "
@@ -400,7 +425,7 @@ Item {
         return ""
     }
     function nodeNoteColor(n) {
-        return (root.isKeyFrame(n) || n.kind === "flat") ? Theme.palette.warning
+        return (root.isKeyFrame(n) || n.kind === "flat" || n.kind === "notAdded") ? Theme.palette.warning
                                                          : Theme.palette.textSecondary
     }
     // Only for a wallet that really has none. A node whose count could not be read must not
@@ -675,7 +700,15 @@ Item {
                                     }
                                 }
                                 LogosButton {
+                                    objectName: "addPhraseAgain_" + seedBranch.index
+                                    visible: seedBranch.bundle.needsPhrase
+                                    text: "Add recovery phrase again…"
+                                    enabled: root.custodian
+                                    onClicked: root.openAddAgain(seedBranch.bundle)
+                                }
+                                LogosButton {
                                     objectName: "addSeedWallet_" + seedBranch.index
+                                    visible: !seedBranch.bundle.needsPhrase
                                     text: "Add accounts…"
                                     enabled: root.custodian
                                     onClicked: {
@@ -688,16 +721,27 @@ Item {
                                 }
                             }
                             LogosText {
+                                objectName: "seedNote_" + seedBranch.index
                                 visible: seedBranch.bundle.seed
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
-                                color: Theme.palette.textSecondary
-                                text: seedBranch.bundle.linked
+                                color: seedBranch.bundle.needsPhrase ? Theme.palette.warning : Theme.palette.textSecondary
+                                text: seedBranch.bundle.needsPhrase
+                                      ? "Added before wallets could be locked. It can't sign until you add its recovery "
+                                        + "phrase again, and until then it is stored unencrypted on this computer."
+                                      : seedBranch.bundle.linked
                                       ? "Account files from the same recovery source."
                                       : "Add a wallet with this recovery phrase to verify and group its existing wallets."
                             }
+                            LogosButton {
+                                objectName: "seedFiles_" + seedBranch.index
+                                visible: seedBranch.bundle.needsPhrase
+                                compact: true
+                                text: root.filesShown(seedBranch.bundle) ? "Hide its account files" : "Show its account files"
+                                onClicked: root.toggleFiles(seedBranch.bundle)
+                            }
                             Repeater {
-                                model: seedBranch.bundle.nodes
+                                model: root.filesShown(seedBranch.bundle) ? seedBranch.bundle.nodes : []
                                 delegate: AccountGroupNode {
                                     Layout.fillWidth: true
                                     view: root
@@ -725,8 +769,10 @@ Item {
                                     manageEnabled: root.custodian
                                     deleteKeyVisible: root.isKeyFrame(modelData)
                                     deleteKeyEnabled: root.custodian
+                                    rowActionText: modelData.kind === "notAdded" ? "Add to the Signer app…" : ""
 
                                     onToggleRequested: root.toggle(modelData.id)
+                                    onRowActionRequested: function (address) { addAgainSheet.account = address; addAgainSheet.open() }
                                     onAddRequested: { addSheet.group = modelData.group; addSheet.open() }
                                     onManageWalletRequested: {
                                         if (modelData.group && modelData.group.family) {
@@ -794,6 +840,7 @@ Item {
     BitcoinWalletSheet { id: bitcoinWalletSheet; backend: root.backend; view: root }
     KeptPhraseSheet { id: keptPhraseSheet; backend: root.backend }
     WalletNameSheet { id: walletNameSheet; backend: root.backend; view: root }
+    AddAgainSheet { id: addAgainSheet; backend: root.backend }
     ManageWalletSheet {
         id: walletSheet
         backend: root.backend

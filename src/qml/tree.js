@@ -189,7 +189,8 @@ function nodeOf(kind, id, group, addresses, prefix) {
 // Every top-level node, in a fixed order: wallets, the keys no live record accounts for, then
 // the accounts no wallet claims, split by how each arrived. `keyIds` comes from the key
 // DIRECTORY, so such a key stays listed — and so deletable — when groups.json is unreadable.
-function buildNodes(accounts, provenance, groups, keyIds, keyKind, nameIds) {
+// `notAdded` are keys an older build imported that the Signer app was never told of.
+function buildNodes(accounts, provenance, groups, keyIds, keyKind, nameIds, notAdded) {
     var out = []
     var claimed = {}
     var recorded = (groups || []).filter(function (g) { return !g.stranded })
@@ -208,23 +209,27 @@ function buildNodes(accounts, provenance, groups, keyIds, keyKind, nameIds) {
     }
     for (var m = 0; m < (nameIds || []).length; ++m)
         out.push(nodeOf("nameOnly", nameIds[m], { id: nameIds[m] }, [], -1))
-    return out.concat(sectionNodes(accounts, provenance, claimed))
+    return out.concat(sectionNodes(accounts, provenance, claimed, notAdded))
 }
 
-// The four sections are separate because each is a different truth, and folding any of them
-// into "Imported" would state a fact about recoverability that is not known.
-function sectionNodes(accounts, provenance, claimed) {
-    var bucket = { imported: [], random: [], orphan: [], unrecorded: [] }
+// The sections are separate because each is a different truth, and folding any of them into
+// "Imported" would state a fact about recoverability that is not known. Keys the Signer app was
+// never told of come first, whatever their origin: they can't sign until each is added.
+function sectionNodes(accounts, provenance, claimed, notAdded) {
+    var bucket = { notAdded: [], imported: [], random: [], orphan: [], unrecorded: [] }
+    var waiting = {}
+    for (var w = 0; w < (notAdded || []).length; ++w) waiting[norm(notAdded[w])] = true
     var rest = (accounts || []).filter(function (a) { return !claimed[norm(a)] })
     for (var j = 0; j < rest.length; ++j) {
         var o = originOf(provenance, rest[j])
-        if (o === "imported-key" || o === "imported-json") bucket.imported.push(rest[j])
+        if (waiting[norm(rest[j])] === true) bucket.notAdded.push(rest[j])
+        else if (o === "imported-key" || o === "imported-json") bucket.imported.push(rest[j])
         else if (o === "random") bucket.random.push(rest[j])
         else if (o === "derived") bucket.orphan.push(rest[j])
         else bucket.unrecorded.push(rest[j])
     }
     var out = []
-    var order = ["imported", "random", "orphan", "unrecorded"]
+    var order = ["notAdded", "imported", "random", "orphan", "unrecorded"]
     for (var n = 0; n < order.length; ++n)
         if (bucket[order[n]].length > 0)
             out.push(nodeOf(order[n], order[n], null,
@@ -264,7 +269,8 @@ function unreadableNodes(accounts, groups, keyIds, keyKind, nameIds) {
 // the node instead of being inferred from an empty list, because an empty list is also what
 // an empty keystore looks like — and "No accounts" is then a failed read stated as a fact
 // about the wallet. `reads` is `{ accounts, groups, provenance }`; absent means it answered.
-function treeOf(accounts, provenance, groups, derivationKeys, reads, names) {
+// `addAgain` is the keystore's list of older builds' wallets the Signer app can't open yet.
+function treeOf(accounts, provenance, groups, derivationKeys, reads, names, addAgain) {
     var r = reads || {}
     var groupsKnown = r.groups !== false
     var keyIds = keyFrameIdsOf(groups, derivationKeys, groupsKnown)
@@ -273,12 +279,21 @@ function treeOf(accounts, provenance, groups, derivationKeys, reads, names) {
     var accountsKnown = r.accounts !== false
     var mine = accountsKnown ? (accounts || []) : []
     var out = (accountsKnown && r.provenance !== false)
-        ? buildNodes(mine, provenance, groups, keyIds, keyKind, nameIds)
+        ? buildNodes(mine, provenance, groups, keyIds, keyKind, nameIds, keysToAdd(addAgain))
         : unreadableNodes(mine, groups, keyIds, keyKind, nameIds)
     for (var i = 0; i < out.length; ++i) {
         if (!accountsKnown) out[i].countKnown = false
         out[i].groupsKnown = groupsKnown
     }
+    return out
+}
+
+// The accounts of older builds' keys the Signer app was never told of: added with a password.
+function keysToAdd(addAgain) {
+    var out = []
+    ;(addAgain || []).forEach(function (a) {
+        if (a && a.needs === "password") out = out.concat(a.accounts || [])
+    })
     return out
 }
 
@@ -294,10 +309,12 @@ function seedGroupsOf(nodes) {
         var key = n.group.seedId || ("unlinked:" + n.id)
         var group = byId[key]
         if (!group) {
-            group = { id: key, seed: true, linked: !!n.group.seedId, nodes: [] }
+            group = { id: key, seed: true, linked: !!n.group.seedId, needsPhrase: false, nodes: [] }
             byId[key] = group
             result.push(group)
         }
+        // Added before wallets could be locked: it can't sign until its phrase comes again.
+        if (n.group.needsPhrase === true) group.needsPhrase = true
         group.nodes.push(n)
     })
     return result

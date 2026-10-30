@@ -420,6 +420,9 @@ void EvmKeystoreUiBackend::loadGroups()
     setLockedWallets(groupsRead ? parseObject(groups).value(QStringLiteral("lockedWallets")).toInt() : 0);
     setLockedSeedsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("lockedSeeds")))
                                   : QStringLiteral("[]"));
+    // An older keystore names none: an array either way.
+    setAddAgainJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("addAgain")).toArray())
+                               : QStringLiteral("[]"));
 
     const QString provenance = modules().keystore_module.get_provenance();
     setProvenanceJson(read(QStringLiteral("provenance"), provenance, QStringLiteral("provenance"))
@@ -840,6 +843,16 @@ bool EvmKeystoreUiBackend::deleteAccount(QString address, QString password)
     else
         say(QStringLiteral("could not delete the account — wrong password, or this build is "
                            "not the configured custodian"));
+    return good;
+}
+
+// Add an older build's wallet again. The phrase and the password go to the keystore only.
+bool EvmKeystoreUiBackend::restoreUnlockRoot(QString paramsJson)
+{
+    setLastError(QString());
+    const bool good = ok(modules().keystore_module.restore_unlock_root(paramsJson), QString());
+    paramsJson.fill(QChar(0));
+    if (good) refresh();
     return good;
 }
 
