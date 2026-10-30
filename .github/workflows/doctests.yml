@@ -1,8 +1,8 @@
 name: evm-keystore-ui Doc-Tests
 
-# The end-to-end spec: an app asks the signer manager to open a wallet and to unlock it, and the
-# keys app decides both, driven over the QML inspector in a headless host. The report is
-# uploaded as an artifact; nothing is published.
+# The end-to-end spec: an app asks the signer manager to open a wallet and to sign without the
+# password, and the keys app decides both, driven over the QML inspector in a headless host. The
+# report is uploaded as an artifact; nothing is published.
 
 on:
   pull_request:

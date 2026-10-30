@@ -42,13 +42,15 @@ successful subset on an I/O failure. The UI removes saved selections before retr
 partial result is never presented as an all-or-nothing failure. Secrets are method arguments
 or dialog-local state, never replica properties; closing the wizard clears them.
 
-This package continues servicing existing signer-manager authorization intents for compatibility:
-`keystore.accounts.open` and `keystore.accounts.unlock`. Their request-specific dialogs remain
-available to wallet apps; the home screen no longer acts as the manager's inventory dashboard.
+This package continues servicing the signer manager's open requests through
+`keystore.accounts.open`. Its request dialog remains available to wallet apps; the home screen
+no longer acts as the manager's inventory dashboard. Signing without the password is set aside
+for now: `keystore.accounts.unlock` and the sheet behind it are gone, an app's request for it can
+only be rejected, and an open that asks for it too opens without it.
 **Add a wallet…** inside an open request uses this same account wizard, with the requested
 Bitcoin address type and network fixed. It offers a new phrase, an existing phrase, or a saved
 encrypted recovery source. Saving selects the first new account back in the pending request;
-it does not approve access or unlock it. Cancelling returns to that request without answering it.
+it does not approve access. Cancelling returns to that request without answering it.
 The retired Bitcoin-only import dialog is no longer packaged.
 
 An open request lists each Bitcoin wallet once, from the signer manager's `roster()`, however many
@@ -260,7 +262,7 @@ defaults, and blaming the deployment for a torn file is a different bug to go lo
 python3 doctests/assert_ui.py --grep-only   # no app, no socket
 node doctests/tree_table.mjs                # the tree rules, as a table
 python3 doctests/assert_ui.py               # the rest, against an app on port 3768
-./doctests/run.sh                           # the e2e spec: an app's open and unlock, decided here
+./doctests/run.sh                           # the e2e spec: an app's opens, decided here
 ```
 
 `doctests/evm-keystore-ui-e2e.test.yaml` runs the keys app in Basecamp's standalone mode beside
@@ -268,13 +270,12 @@ the `keys_probe` fixture and its app, `keys_probe_ui`, which sends each of the f
 to the keys app through Basecamp's `keystore.accounts.open` intent. The fixture asks to open any
 native segwit wallet on regtest before one exists, so the person adds one from the request,
 keeping its phrase and giving the day it was first used, and opens it. The fixture then asks to
-unlock it for two confirmed signatures, and to open a mock device's wallet, and the person grants
-both. Then the person shows the descriptor, adds an EVM account from the kept phrase without
-typing it, and shows and forgets the phrase. The Signer's `keystore.accounts.unlock` arrives for
-the EVM account: the Signer is not installed, so the spec calls the view's own handler, and the
-person unlocks the account offered. Last, the fixture asks for a taproot wallet, and the person
-creates one. The spec checks what the fixture was handed: the descriptors, a 32-byte database
-key, where each wallet's history starts, and the terms the person granted.
+sign two confirmed signatures with it without the password, which the person can only reject,
+and to open a mock device's wallet, which they grant. Then the person shows the descriptor, adds
+an EVM account from the kept phrase without typing it, and shows and forgets the phrase. Last,
+the fixture asks for a taproot wallet, and the person creates one. The spec checks what the
+fixture was handed: the descriptors, a 32-byte database key, where each wallet's history starts,
+and that its request to sign without the password was rejected.
 
 ## Building
 
