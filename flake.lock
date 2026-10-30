@@ -203,11 +203,11 @@
         "logos-signer-interface": "logos-signer-interface"
       },
       "locked": {
-        "lastModified": 1793395634,
+        "lastModified": 1793396465,
         "narHash": "sha256-6Zk4tvY0ZoJsY1eLtyUaO7HXU8tWD5N6YnFCxhLzw+k=",
         "owner": "logos-co",
         "repo": "logos-evm-keystore-module",
-        "rev": "1826a4b675cb4418573cbb43d3a41e9a4e16816b",
+        "rev": "2d0e4b4940d236db226bdfea96524d59235dc20d",
         "type": "github"
       },
       "original": {
