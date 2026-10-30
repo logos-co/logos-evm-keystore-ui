@@ -567,6 +567,22 @@ check("the sheet sends one call, and clears what was typed",
 check("the wallet's name is in the body, as plain text",
       re.search(r'objectName: "addAgainName"[^}]*textFormat: Text.PlainText', again, re.S) is not None, True)
 
+print("0q) an earlier version's keystore is offered, and what stays is not offered again")
+# This build reads keystore/v2 only; what an earlier one left beside it is listed nowhere else.
+rep = (Path(__file__).resolve().parent.parent / "src" / "evm_keystore_ui.rep").read_text()
+check("the keystore's report reaches the view", 'j(backend.olderKeystoreJson, "{}")' in view
+      and "PROP(QString olderKeystoreJson" in rep, True)
+check("offered only while a move would bring something",
+      "Tree.olderHolds(root.olderKeystore)" in block(code(view), 'objectName: "olderKeystore"', 4), True)
+check("one button moves it, for the custodian",
+      "root.backend.moveOlderKeystore()" in code(view) and "SLOT(bool moveOlderKeystore())" in rep
+      and "root.custodian" in block(code(view), 'objectName: "moveOlderKeystore"', 3), True)
+check("what stays there is named, as plain text",
+      re.search(r'objectName: "olderKeystoreLeft"[^}]*textFormat: Text.PlainText', view, re.S) is not None, True)
+# Possible key material is a report: the keystore refuses nothing on it any more.
+check("the key directory notice no longer claims creating is refused",
+      "creating an account is refused" in view, False)
+
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)
 check("the view imports it", 'import "tree.js" as Tree' in view, True)
