@@ -48,7 +48,7 @@ Item {
     // instant we are dispatched, so gating on it would refuse a request that succeeded.
     function serviceIntent(requestId, intent, params, requesterName) {
         if (intent === "keystore.accounts.open") {
-            // An app's open or unlock request, by the manager's handle. Answered when the
+            // An app's open request, by the manager's handle. Answered when the
             // person decides; a handle the manager does not hold is a bad request.
             root.intentByHandle[params.handle] = requestId
             logos.watch(root.backend.showAccess(params.handle), function (opened) {
@@ -57,20 +57,9 @@ Item {
             })
             return
         }
-        if (intent === "keystore.accounts.unlock") {
-            // Another app sends the person here to unlock an account: offered first, terms theirs.
-            // Answered when they unlock or leave; a newer request ends the one it replaces.
-            if (root.unlockIntent !== "") logos.respond(root.unlockIntent, false, ({}), "cancelled")
-            root.unlockIntent = requestId
-            unlockSheet.presetAccount = params.account || ""
-            unlockSheet.presetApp = params.app || ""
-            if (unlockSheet.opened) unlockSheet.applyPresets(); else unlockSheet.open()
-            return
-        }
         if (intent !== "evm.accounts.manage") return
         logos.respond(requestId, true, ({}), "")
     }
-    property string unlockIntent: ""
 
     // Intents being serviced, keyed by the manager's handle each one named.
     property var intentByHandle: ({})
@@ -95,13 +84,12 @@ Item {
     readonly property bool custodian: ready && backend.isCustodian
     readonly property var identity: ready ? j(backend.identityJson, "{}") : ({})
 
-    // The signer manager, as its custodian: apps' open and unlock requests, what is unlocked,
-    // and which wallets are open for which apps.
+    // The signer manager, as its custodian: apps' open requests, and which wallets are open for
+    // which apps.
     readonly property var phrases: ready ? j(backend.phrasesJson, "[]") : []
     readonly property bool managerCustodian: ready && backend.isManagerCustodian
     readonly property var access: ready ? j(backend.accessJson, "[]") : []
     readonly property var accessShown: ready ? j(backend.accessShownJson, "{}") : ({})
-    readonly property var unlocked: ready ? j(backend.unlockedJson, "[]") : []
     readonly property var openWallets: ready ? j(backend.openJson, "[]") : []
     readonly property var deviceAccounts: ready ? j(backend.deviceAccountsJson, "[]") : []
     readonly property var deviceWallets: ready ? j(backend.deviceWalletsJson, "[]") : []
@@ -139,22 +127,6 @@ Item {
         .map(function (g) {
             return { id: g.id, name: root.walletNameOf(g.id) || g.id, family: g.family, chain: g.chain }
         })
-    // What can be unlocked: every account by address, and every Bitcoin wallet by id.
-    readonly property var unlockable: root.accounts.map(function (a) {
-            var label = root.labels[String(a).toLowerCase()] || root.labels[a] || ""
-            return { id: String(a), name: label ? label + "  " + a : String(a) }
-        }).concat(root.bitcoinWallets.map(function (w) { return { id: w.id, name: w.name + " (Bitcoin)" } }))
-    function accountName(id) {
-        var hit = root.unlockable.filter(function (u) { return u.id.toLowerCase() === String(id).toLowerCase() })
-        return hit.length ? hit[0].name : String(id)
-    }
-    function termsLine(u) {
-        var when = u.expiresInMs === null || u.expiresInMs === undefined ? "until locked"
-                   : "for " + Math.max(1, Math.round(u.expiresInMs / 60000)) + " more min"
-        var count = u.countLeft === null || u.countLeft === undefined ? "no limit" : u.countLeft + " left"
-        var apps = (u.apps || []).length ? u.apps.join(", ") : "nobody"
-        return when + ", " + count + ", for " + apps + (u.confirm === false ? ", without asking" : ", confirmed")
-    }
 
     // What the key directory holds. Read from that directory alone, so this stays populated
     // when groups.json is unreadable and no wallet is listed — otherwise the key would be
@@ -809,7 +781,7 @@ Item {
     // ── Add an account to one wallet, and manage that wallet ───────────────────────
     AddAccountSheet { id: addSheet; backend: root.backend; view: root }
 
-    // ── An app's request, and the person's own unlock ──────────────────────────────
+    // ── An app's request ───────────────────────────────────────────────────────────
     AccessSheet {
         id: accessSheet
         backend: root.backend
@@ -823,16 +795,6 @@ Item {
             accountFlow.presetFamily = family
             accountFlow.presetChain = chain
             accountFlow.open()
-        }
-    }
-    UnlockSheet {
-        id: unlockSheet
-        backend: root.backend
-        accounts: root.unlockable
-        onFinished: function (unlocked) {
-            if (root.unlockIntent === "") return
-            logos.respond(root.unlockIntent, unlocked, ({}), unlocked ? "" : "cancelled")
-            root.unlockIntent = ""
         }
     }
 

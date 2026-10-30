@@ -38,7 +38,7 @@ LogosDialog {
         LogosText {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: sheet.keptId ? "Unlock the saved recovery phrase. Its words stay inside the Keystore."
+            text: sheet.keptId ? "Open the saved recovery phrase with its password. Its words stay inside the Keystore."
                                : "Enter the recovery phrase for this seed group. It will be checked against the existing wallet and will not be saved."
         }
         Accounts.PhraseGrid {

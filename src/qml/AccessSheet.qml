@@ -4,10 +4,11 @@ import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
 
-// An app asks the signer manager to open a Bitcoin wallet for it, or to unlock an account, and
-// the person decides here. The lines are the manager's own, shown verbatim; the requester's
-// reason among them is marked as its claim. The title is fixed: LogosDialog renders `title`
-// as AutoText, and a module name is not ours to render that way.
+// An app asks the signer manager to open a Bitcoin wallet for it, and the person decides here.
+// Signing without a password isn't offered for now: such a request can only be refused, and an
+// open that asks for it too opens without it. The lines are the manager's own, shown verbatim;
+// the requester's reason among them is marked as its claim. The title is fixed: LogosDialog
+// renders `title` as AutoText, and a module name is not ours to render that way.
 LogosDialog {
     id: sheet
     objectName: "accessSheet"
@@ -48,7 +49,7 @@ LogosDialog {
         var holder = (hit[0].holders || []).filter(function (h) { return h.id === id })[0]
         return holder ? Object.assign({}, hit[0], { id: id, device: holder.device, signer: holder.signer }) : hit[0]
     }
-    // A device signs on its own screen: nothing to unlock, and its data has a password of its own.
+    // A device signs on its own screen, and its data has a password of its own.
     readonly property bool onDevice: isOpen && !!(target && target.device)
     readonly property bool firstOpen: onDevice && !target.hasKey
     readonly property bool birthdayOk: birthday.text.trim() === "" || /^\d{4}-\d{2}-\d{2}$/.test(birthday.text.trim())
@@ -69,10 +70,6 @@ LogosDialog {
         pw.text = ""
         pwAgain.text = ""
         birthday.text = ""
-        alsoUnlock.checked = !!(isOpen && asked.unlock)
-        terms.load(isOpen ? asked.unlock : asked.terms)
-        // An app that named no apps asks for itself.
-        terms.defaultApps(shown.requester || "")
     }
 
     contentItem: ColumnLayout {
@@ -125,11 +122,15 @@ LogosDialog {
             text: (sheet.shown.requester || "The app") + " will see every address and transaction of "
                   + "this wallet, and can ask you to sign. It can't sign by itself."
         }
-        LogosCheckbox {
-            id: alsoUnlock
-            objectName: "accessAlsoUnlock"
-            visible: sheet.isOpen && !sheet.onDevice
-            text: "Also unlock it"
+        LogosText {
+            objectName: "accessNoPasswordless"
+            visible: !sheet.isOpen || (!!sheet.asked.unlock && !sheet.onDevice)
+            Layout.fillWidth: true
+            textFormat: Text.PlainText
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: sheet.isOpen ? "It also asks to sign without the password. That isn't offered for now: only the wallet opens."
+                               : "Signing without the password isn't offered for now, so this can only be rejected."
         }
         LogosText {
             objectName: "accessDeviceNote"
@@ -139,7 +140,7 @@ LogosDialog {
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: sheet.onDevice
-                  ? "This wallet's key is on " + sheet.target.signer + ": it signs there, so there is nothing to unlock. "
+                  ? "This wallet's key is on " + sheet.target.signer + ": it signs there, on its own screen. "
                     + (sheet.firstOpen
                        ? "Set a password for its data: the app keeps the wallet's history encrypted with a key kept "
                          + "here, behind it. Forget it, and the app reads the wallet's history again from the start."
@@ -147,21 +148,13 @@ LogosDialog {
                   : ""
         }
 
-        // ── the terms, for an unlock request or an open that unlocks too ───────────
-        UnlockTerms {
-            id: terms
-            namePrefix: "access"
-            Layout.fillWidth: true
-            visible: !sheet.isOpen || (alsoUnlock.checked && !sheet.onDevice)
-        }
-
         LogosTextField {
             id: pw
             objectName: "accessPasswordField"
+            visible: sheet.isOpen
             Layout.fillWidth: true
             echoMode: TextInput.Password
-            placeholderText: !sheet.isOpen ? "The account's password"
-                             : sheet.firstOpen ? "Set a password for this wallet's data"
+            placeholderText: sheet.firstOpen ? "Set a password for this wallet's data"
                              : sheet.onDevice ? "This wallet's data password"
                              : "The wallet's password"
             Component.onCompleted: textInput.passwordMaskDelay = 0
@@ -210,17 +203,16 @@ LogosDialog {
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "accessApproveButton"
-                text: sheet.isOpen ? "Open" : "Unlock"
-                enabled: pw.text.length > 0
+                visible: sheet.isOpen
+                text: "Open"
+                enabled: sheet.isOpen && pw.text.length > 0
                          && (!sheet.picks || sheet.picked !== "")
                          && (!sheet.firstOpen || (pwAgain.text === pw.text && sheet.birthdayOk))
-                         && ((sheet.isOpen && (!alsoUnlock.checked || sheet.onDevice)) || terms.complete)
                 onClicked: {
                     var h = sheet.shown.handle
-                    var unlock = (!sheet.isOpen || (alsoUnlock.checked && !sheet.onDevice)) ? JSON.stringify(terms.value) : ""
                     var day = sheet.firstOpen ? birthday.text.trim() : ""
                     logos.watch(sheet.backend.approveAccess(h, sheet.shown.bundle_id,
-                                                           sheet.picks ? sheet.picked : "", pw.text, unlock, day),
+                                                           sheet.picks ? sheet.picked : "", pw.text, day),
                                 function (ok) { if (ok) { sheet.decided(h, true); sheet.close() } })
                     pw.text = ""
                     pwAgain.text = ""
