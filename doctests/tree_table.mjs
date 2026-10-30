@@ -309,5 +309,24 @@ check("group across families without merging unknown or different seeds",
    [true, true, ["other"]], [false, false, ["key"]]]);
 check("empty keystores have no seed groups", T.seedGroupsOf([]), []);
 
+console.log("15) an older build's wallet the Signer app can't open says what it needs");
+// A file that keeps no unlock root marks its seed; an older imported key, whatever its recorded
+// origin, gets a section of its own ahead of the rest, so its button is where it is read.
+check("a file that needs its phrase marks its seed",
+  T.seedGroupsOf([{kind: "wallet", id: "asd", group: {needsPhrase: true}},
+                  {kind: "wallet", id: "eth", group: {seedId: "seed1"}}]).map(g => [g.id, g.needsPhrase]),
+  [["unlinked:asd", true], ["seed1", false]]);
+const again = [{ seed: "k_1", needs: "password", groups: [], accounts: [OLD.toLowerCase()] },
+               { seed: "g_2", needs: "phrase", groups: [G1], accounts: [A1] }];
+const older = T.treeOf(accounts, prov, groups, [], {}, NAMES, again);
+check("a key to add again leaves its old section for one of its own",
+  older.filter(n => !n.group).map(n => [n.kind, n.addresses]),
+  [["notAdded", [OLD]], ["imported", [IMP]]]);
+check("a wallet's accounts stay with their wallet",
+  older.filter(n => n.kind === "wallet").map(n => n.addresses.length), [2, 1]);
+check("without the list nothing moves",
+  T.treeOf(accounts, prov, groups, [], {}, NAMES).filter(n => !n.group).map(n => n.kind),
+  ["imported", "unrecorded"]);
+
 console.log(failed ? `\n${failed} FAILED` : "\nall passed");
 process.exit(failed ? 1 : 0);

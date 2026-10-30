@@ -539,7 +539,7 @@ print("0o) a name left standing over nothing is a row, so it can be removed")
 check("its frame is decided with the wallet read in hand",
       "Tree.nameFrameIdsOf(groups, walletNames, keyFrames, groupsKnown)" in view, True)
 check("and it reaches the tree", "Tree.treeOf(accounts, provenance, groups, derivationKeys, "
-      "reads, walletNames)" in view, True)
+      "reads, walletNames, addAgain)" in view, True)
 check("the row says what is under it, which is nothing but the name",
       'n.kind === "nameOnly"' in code(view) and "Only a name is stored under this wallet"
       in code(view), True)
@@ -551,6 +551,21 @@ check("and removal is offered on it", 'n.kind === "nameOnly"'
 check("the sheet does not offer to manage a wallet that is not there",
       "!sheet.nameOnly" in block(code(manage), 'objectName: "walletNothingToManage"', 8), True)
 check("it says what is left instead", 'objectName: "nameOnlyLeftover"' in code(manage), True)
+
+print("0p) an older build's wallet says what it needs, and offers it")
+# Added before wallets could be locked, it was offered to apps whose sends ended at "unlock it in
+# the Signer app", where it isn't. The keystore names it now; this screen is where it is fixed.
+again = text("AddAgainSheet.qml")
+check("the keystore's list reaches the view", 'j(backend.addAgainJson, "[]")' in view, True)
+check("the wallet's header says why it can't sign, and that it is stored unencrypted",
+      "It can't sign until you add its recovery" in view and "stored unencrypted on this computer" in view, True)
+check("and its account files fold away until asked for", "root.filesShown(seedBranch.bundle)" in view, True)
+check("the phrase is offered there", "root.openAddAgain(seedBranch.bundle)" in view, True)
+check("an older key is offered its own button", '"Add to the Signer app…"' in view, True)
+check("the sheet sends one call, and clears what was typed",
+      "backend.restoreUnlockRoot(JSON.stringify(p))" in again and "clearSecrets()" in again, True)
+check("the wallet's name is in the body, as plain text",
+      re.search(r'objectName: "addAgainName"[^}]*textFormat: Text.PlainText', again, re.S) is not None, True)
 
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)

@@ -41,12 +41,15 @@ LogosFrame {
     property bool deleteKeyVisible: false
     property bool deleteKeyEnabled: false
     property bool expanded: true
+    // An action of each account's own, beside Manage: "" for none.
+    property string rowActionText: ""
 
     signal toggleRequested()
     signal addRequested()
     signal manageWalletRequested()
     signal manageAccountRequested(string address)
     signal forgetKeyRequested()
+    signal rowActionRequested(string address)
 
     backgroundColor: Theme.palette.surface
     borderColor: Theme.palette.borderSubtle
@@ -254,6 +257,13 @@ LogosFrame {
                     }
                 }
                 Item { Layout.fillWidth: true }
+                LogosButton {
+                    objectName: "rowAction_" + modelData
+                    visible: node.rowActionText.length > 0
+                    text: node.rowActionText
+                    enabled: node.view.custodian
+                    onClicked: node.rowActionRequested(modelData)
+                }
                 LogosButton {
                     objectName: "manage_" + modelData
                     text: "Manage"

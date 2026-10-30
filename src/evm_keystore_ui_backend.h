@@ -38,6 +38,7 @@ public:
                         QString groupPassword, bool derivable, QString groupLabel,
                         QString keepPhrasePassword) override;
     bool addSeedWallet(QString paramsJson) override;
+    bool restoreUnlockRoot(QString paramsJson) override;
     bool importMnemonicFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
                                 QString accountPassword, QString groupPassword, bool derivable,
                                 QString groupLabel) override;
