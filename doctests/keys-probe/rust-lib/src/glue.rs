@@ -2,7 +2,8 @@
 //!
 //!   1. name the keystore's and the manager's roles (ungated)
 //!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
-//!   3. request_unlock for that wallet, two signatures, each confirmed, and wait
+//!   3. request_unlock for that wallet, two signatures, each confirmed: the keys app offers
+//!      only Reject for it now, so the person refuses and this goes on
 //!   4. request_open for the mock device's wallet, and wait
 //!   5. when keys_probe_ui asks, request_open for a regtest taproot wallet: the person creates one
 //!
@@ -18,7 +19,7 @@ type Shared = std::sync::Arc<std::sync::Mutex<Value>>;
 const MARK: &str = "KEYS_PROBE";
 
 /// The keystore: the keys app administers it, and only the manager may have it sign. The
-/// manager: the keys app decides open and unlock requests, and a mock device signs beside the keystore.
+/// manager: the keys app decides open requests, and a mock device signs beside the keystore.
 const KEYSTORE_ROLES: &str = r#"{"custodians":"evm_keystore_ui","managers":"signer_manager_module"}"#;
 const MANAGER_ROLES: &str = r#"{"approvers":"evm_signer_ui","custodians":"evm_keystore_ui","signers":["keystore_module","mock_device_signer"]}"#;
 
@@ -108,15 +109,8 @@ fn drive(state: Shared) {
     let unlock = json!({ "account": group, "count": 2, "confirm": true, "apps": ["keys_probe"],
                          "reason": "Doc-test: two signatures" });
     match ask_and_wait(&state, "UNLOCK", modules().signer_manager_module.request_unlock(&unlock.to_string()).map_err(|e| format!("{e:?}"))) {
-        Ok(v) => {
-            println!("{MARK}_UNLOCKED: {}", v.get("terms").cloned().unwrap_or(Value::Null));
-            set!(json!({ "ok": true, "state": "unlocked" }));
-        }
-        Err(e) => {
-            println!("{MARK}_ERROR: unlock: {e}");
-            set!(json!({ "ok": false, "state": "unlock_failed", "error": e }));
-            return;
-        }
+        Ok(v) => println!("{MARK}_UNLOCKED: {}", v.get("terms").cloned().unwrap_or(Value::Null)),
+        Err(e) => println!("{MARK}_UNLOCK_REFUSED: {e}"),
     }
 
     // A wallet whose key is on the mock device: its first open sets the password of its data.

@@ -567,9 +567,25 @@ check("the sheet sends one call, and clears what was typed",
 check("the wallet's name is in the body, as plain text",
       re.search(r'objectName: "addAgainName"[^}]*textFormat: Text.PlainText', again, re.S) is not None, True)
 
-print("0q) an earlier version's keystore is offered, and what stays is not offered again")
+print("0q) signing without the password is set aside: not offered, and nothing left to grant it")
+# "Unlock" now means a wallet's data, in the Signer app; this app named its signing sessions the same.
+access = text("AccessSheet.qml")
+rep = srctext("evm_keystore_ui.rep")
+check("its sheet and terms are gone", [n for n in ("UnlockSheet.qml", "UnlockTerms.qml") if (QML / n).exists()], [])
+check("the view no longer takes the Signer's request for one", "keystore.accounts.unlock" in code(view), False)
+check("...nor says it does", "keystore.accounts.unlock" in (SRC.parent / "metadata.json").read_text(), False)
+check("the backend can't grant or end one", [n for n in ("unlockAccount", "lockAccount", "unlockedJson") if n in rep], [])
+check("an app's request for one can only be rejected",
+      "visible: sheet.isOpen" in block(code(access), 'objectName: "accessApproveButton"', 2), True)
+check("...and says why", 'objectName: "accessNoPasswordless"' in code(access), True)
+check("an open approves the open alone", "approveAccess(QString handle, QString bundleId, QString group, "
+      "QString password, QString birthday)" in rep, True)
+check("a kept phrase opens with its password, rather than unlocking",
+      [n for n in ("AccountFlowSheet.qml", "SeedWalletSheet.qml") if '"Unlock' in speech(code(text(n)))], [])
+
+print("0r) an earlier version's keystore is offered, and what stays is not offered again")
 # This build reads keystore/v2 only; what an earlier one left beside it is listed nowhere else.
-rep = (Path(__file__).resolve().parent.parent / "src" / "evm_keystore_ui.rep").read_text()
+rep = srctext("evm_keystore_ui.rep")
 check("the keystore's report reaches the view", 'j(backend.olderKeystoreJson, "{}")' in view
       and "PROP(QString olderKeystoreJson" in rep, True)
 check("offered only while a move would bring something",

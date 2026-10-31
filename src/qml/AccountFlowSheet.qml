@@ -168,7 +168,7 @@ LogosDialog {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                         text: sheet.mode === "create" ? "Write this down. It is the only way to recover the account, it is shown "
                                                         + "once, and anyone who reads it can spend from the account."
-                            : sheet.keptId ? "Unlock the encrypted recovery source to preview more accounts."
+                            : sheet.keptId ? "Open the encrypted recovery source with its password to preview more accounts."
                             : "Enter your recovery phrase to preview Ethereum and Bitcoin accounts."
                     }
                     RowLayout {
@@ -360,7 +360,7 @@ LogosDialog {
                     LogosText {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
                         text: sheet.keptId ? "The existing encrypted recovery source will be reused. Its password stays unchanged."
-                            : keep.checked ? "Saved separately with the same password. Unlock it later to add accounts."
+                            : keep.checked ? "Saved separately with the same password. Open it with that password later to add accounts."
                             : "Only the selected account keys are saved. Enter your recovery phrase again to add more accounts."
                     }
                 }
