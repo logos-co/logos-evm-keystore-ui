@@ -319,3 +319,23 @@ function seedGroupsOf(nodes) {
     })
     return result
 }
+
+// An older build's keystore, which this one no longer reads: whether moving it in would bring
+// anything, and what, in words. What would stay there (`left`) is no reason to offer a move.
+function olderHolds(o) {
+    o = o || {}
+    return (o.accounts | 0) + (o.keys | 0) + (o.phrases | 0) + (o.devices | 0) > 0
+           || (o.documents || []).length > 0
+}
+
+function olderSummary(o) {
+    o = o || {}
+    var parts = []
+    function count(n, one, many) { n = n | 0; if (n > 0) parts.push(n + " " + (n === 1 ? one : many)) }
+    count(o.keys, "wallet key", "wallet keys")
+    count(o.accounts, "account file", "account files")
+    count(o.phrases, "kept recovery phrase", "kept recovery phrases")
+    count(o.devices, "device wallet key", "device wallet keys")
+    if (parts.length === 0 && (o.documents || []).length > 0) parts.push("wallet names and records")
+    return parts.join(", ")
+}

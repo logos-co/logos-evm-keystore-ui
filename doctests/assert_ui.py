@@ -583,6 +583,22 @@ check("an open approves the open alone", "approveAccess(QString handle, QString 
 check("a kept phrase opens with its password, rather than unlocking",
       [n for n in ("AccountFlowSheet.qml", "SeedWalletSheet.qml") if '"Unlock' in speech(code(text(n)))], [])
 
+print("0r) an earlier version's keystore is offered, and what stays is not offered again")
+# This build reads keystore/v2 only; what an earlier one left beside it is listed nowhere else.
+rep = srctext("evm_keystore_ui.rep")
+check("the keystore's report reaches the view", 'j(backend.olderKeystoreJson, "{}")' in view
+      and "PROP(QString olderKeystoreJson" in rep, True)
+check("offered only while a move would bring something",
+      "Tree.olderHolds(root.olderKeystore)" in block(code(view), 'objectName: "olderKeystore"', 4), True)
+check("one button moves it, for the custodian",
+      "root.backend.moveOlderKeystore()" in code(view) and "SLOT(bool moveOlderKeystore())" in rep
+      and "root.custodian" in block(code(view), 'objectName: "moveOlderKeystore"', 3), True)
+check("what stays there is named, as plain text",
+      re.search(r'objectName: "olderKeystoreLeft"[^}]*textFormat: Text.PlainText', view, re.S) is not None, True)
+# Possible key material is a report: the keystore refuses nothing on it any more.
+check("the key directory notice no longer claims creating is refused",
+      "creating an account is refused" in view, False)
+
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)
 check("the view imports it", 'import "tree.js" as Tree' in view, True)

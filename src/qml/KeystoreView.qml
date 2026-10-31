@@ -77,6 +77,10 @@ Item {
     readonly property int lockedWallets: ready ? backend.lockedWallets : 0
     // Older builds' wallets the Signer app can't open until they are added again.
     readonly property var addAgain: ready ? j(backend.addAgainJson, "[]") : []
+    // What an earlier version left in the keystore folder this one doesn't read until it moves in.
+    readonly property var olderKeystore: ready ? j(backend.olderKeystoreJson, "{}") : ({})
+    readonly property var olderLeft: olderKeystore.left || []
+    property bool movingOlder: false
     readonly property var provenance: ready ? j(backend.provenanceJson, "{}") : ({})
     // What names each wallet, read from the keystore's own names document — so a wallet whose
     // record is gone keeps its name, and a torn file refuses rather than reading as "unnamed".
@@ -130,8 +134,7 @@ Item {
 
     // What the key directory holds. Read from that directory alone, so this stays populated
     // when groups.json is unreadable and no wallet is listed — otherwise the key would be
-    // undeletable. `staged` and `unexplained` are the states that refuse a new account, and a
-    // refusal whose cause is invisible is a wedge.
+    // undeletable. `unexplained` is what the keystore can't tell from a key, shown so it can be checked.
     readonly property var keyDirectory: ready ? j(backend.keyDirectoryJson, "{}") : ({})
     readonly property var derivationKeys: keyDirectory.groups || []
     readonly property var stagedKeys: keyDirectory.staged || []
@@ -523,6 +526,42 @@ Item {
             ]
         }
 
+        // Its wallets are missing from everything below until they move in. Offered only while a
+        // move would bring something, so what stays there is never offered twice.
+        LogosNotice {
+            objectName: "olderKeystore"
+            Layout.fillWidth: true
+            shown: Tree.olderHolds(root.olderKeystore)
+            visible: shown
+            title: "Wallets from an earlier version"
+            message: "An earlier version of this app kept them in a folder this one doesn't read: "
+                     + Tree.olderSummary(root.olderKeystore) + ". They aren't shown and can't sign until "
+                     + "they're moved here. Their files move as they are, under the same passwords."
+            actions: [
+                LogosButton {
+                    objectName: "moveOlderKeystore"
+                    text: "Move them here"
+                    enabled: root.custodian && !root.movingOlder
+                    onClicked: {
+                        root.movingOlder = true
+                        logos.watch(root.backend.moveOlderKeystore(), function () { root.movingOlder = false })
+                    }
+                }
+            ]
+        }
+        LogosText {
+            objectName: "olderKeystoreLeft"
+            Layout.fillWidth: true
+            visible: root.olderLeft.length > 0 || root.olderKeystore.ok === false
+            textFormat: Text.PlainText
+            wrapMode: Text.WordWrap
+            font.pixelSize: Theme.typography.secondaryText
+            color: Theme.palette.textSecondary
+            text: root.olderKeystore.ok === false
+                  ? "The earlier version's keystore folder could not be read: " + (root.olderKeystore.error || "no reason given")
+                  : "Staying in the earlier version's keystore folder, unused: " + root.olderLeft.join(", ")
+        }
+
         // ── Kept recovery phrases: off unless the person chose to keep one ──────────────
         ColumnLayout {
             objectName: "keptPhrases"
@@ -569,9 +608,9 @@ Item {
                   + "have said is unknown here — an unreadable answer is not an empty one."
         }
 
-        // Files in the key directory that the keystore did not write. It refuses to create an
-        // unrelated account while one is there, because it cannot tell one from a live
-        // whole-wallet key without its password — so say which file, or the refusal is a wall.
+        // Files in the key directory that the keystore did not write. Nothing is refused because
+        // of them; they're named because one may be a live whole-wallet key, and only its
+        // password could tell.
         ColumnLayout {
             objectName: "unexplainedKeyFiles"
             Layout.fillWidth: true
@@ -582,10 +621,9 @@ Item {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: Theme.palette.warning
-                text: "The key directory holds something this keystore did not write. Until it is "
-                      + "removed, creating an account is refused: an unidentified file there may "
+                text: "The key directory holds something this keystore did not write. It may "
                       + "be a live key for a whole wallet, and there is no way to tell without "
-                      + "its password."
+                      + "its password, so it is listed here and otherwise left alone."
             }
             Repeater {
                 model: root.unexplainedPaths

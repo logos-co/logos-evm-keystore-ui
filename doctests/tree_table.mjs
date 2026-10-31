@@ -328,5 +328,18 @@ check("without the list nothing moves",
   T.treeOf(accounts, prov, groups, [], {}, NAMES).filter(n => !n.group).map(n => n.kind),
   ["imported", "unrecorded"]);
 
+console.log("16) an older build's keystore is offered only when a move would bring something");
+const olderOne = { accounts: 3, keys: 1, phrases: 1, devices: 0, documents: ["seeds.json"], left: ["notes.txt"] };
+check("what it would bring, in words", T.olderSummary(olderOne),
+  "1 wallet key, 3 account files, 1 kept recovery phrase");
+check("so it is offered", T.olderHolds(olderOne), true);
+check("names and records alone are still worth moving",
+  [T.olderHolds({ documents: ["group-labels.json"] }), T.olderSummary({ documents: ["group-labels.json"] })],
+  [true, "wallet names and records"]);
+// After a move, only what stays: a file nobody wrote, or one this keystore holds otherwise.
+check("what stays there is not offered again", T.olderHolds({ accounts: 0, documents: [], left: ["notes.txt"] }), false);
+check("a fresh install, or an unanswered read, offers nothing",
+  [T.olderHolds({}), T.olderHolds(undefined), T.olderSummary({})], [false, false, ""]);
+
 console.log(failed ? `\n${failed} FAILED` : "\nall passed");
 process.exit(failed ? 1 : 0);

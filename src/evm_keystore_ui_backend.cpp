@@ -404,8 +404,8 @@ void EvmKeystoreUiBackend::loadGroups()
 
     // Read from the key directory alone, so it survives an unreadable groups.json. Without
     // it a whole-wallet key whose record is gone could not be named, and so never deleted.
-    // The whole reply is carried: `staged` and `unexplained` are the states that refuse a
-    // new account, and a refusal the user cannot see the reason for is a wedge.
+    // The whole reply is carried: `staged` and `unexplained` are what the keystore can't explain,
+    // and what can't be named can't be checked or removed.
     const QString keys = modules().keystore_module.list_derivation_keys();
     QJsonObject dir;
     if (read(QStringLiteral("derivationKeys"), keys, QStringLiteral("derivation keys"))) {
@@ -415,6 +415,11 @@ void EvmKeystoreUiBackend::loadGroups()
             dir[k] = r.value(k).toArray();
     }
     setKeyDirectoryJson(compact(dir));
+
+    // Not a read that refuses the screen: a keystore with no answer offers nothing to move, and
+    // one that refuses carries its reason to the notice.
+    const QJsonObject older = parseObject(modules().keystore_module.older_keystore());
+    setOlderKeystoreJson(older.isEmpty() ? QStringLiteral("{}") : compact(older));
     publishReads();
 }
 
@@ -818,6 +823,15 @@ bool EvmKeystoreUiBackend::restoreUnlockRoot(QString paramsJson)
     setLastError(QString());
     const bool good = ok(modules().keystore_module.restore_unlock_root(paramsJson), QString());
     paramsJson.fill(QChar(0));
+    if (good) refresh();
+    return good;
+}
+
+// Move an older build's keystore in. What stays there is read again with the rest.
+bool EvmKeystoreUiBackend::moveOlderKeystore()
+{
+    setLastError(QString());
+    const bool good = ok(modules().keystore_module.move_older_keystore(), QStringLiteral("move the older keystore"));
     if (good) refresh();
     return good;
 }
