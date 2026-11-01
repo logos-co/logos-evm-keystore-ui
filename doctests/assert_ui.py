@@ -579,7 +579,7 @@ check("an app's request for one can only be rejected",
       "visible: sheet.isOpen" in block(code(access), 'objectName: "accessApproveButton"', 2), True)
 check("...and says why", 'objectName: "accessNoPasswordless"' in code(access), True)
 check("an open approves the open alone", "approveAccess(QString handle, QString bundleId, QString group, "
-      "QString password, QString birthday)" in rep, True)
+      "QString password)" in rep, True)
 check("a kept phrase opens with its password, rather than unlocking",
       [n for n in ("AccountFlowSheet.qml", "SeedWalletSheet.qml") if '"Unlock' in speech(code(text(n)))], [])
 

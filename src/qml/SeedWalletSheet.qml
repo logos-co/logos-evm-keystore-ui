@@ -29,7 +29,7 @@ LogosDialog {
         while (used[n]) ++n
         account.text = String(n)
     }
-    onOpened: { clearSecrets(); working = false; walletName.text = ""; birthday.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
+    onOpened: { clearSecrets(); working = false; walletName.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
     onClosed: { clearSecrets(); working = false }
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 620)
@@ -98,19 +98,6 @@ LogosDialog {
             visible: sheet.family === "evm"
             text: "Allow adding Ethereum addresses with this wallet password"
         }
-        LogosTextField {
-            id: birthday; objectName: "seedBirthday"
-            visible: sheet.family !== "evm"
-            Layout.fillWidth: true
-            placeholderText: "First used on, YYYY-MM-DD (optional)"
-        }
-        LogosText {
-            visible: sheet.family !== "evm"
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            color: Theme.palette.textSecondary
-            text: "Leave the date empty if unsure, so the Bitcoin wallet scans from the beginning."
-        }
         LogosText {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
@@ -135,7 +122,6 @@ LogosDialog {
                         groupLabel: walletName.text.trim(), label: walletName.text.trim() }
                     if (sheet.keptId) { p.keptPhrase = sheet.keptId; p.phrasePassword = phrasePw.text }
                     else p.phrase = words.text
-                    if (sheet.family !== "evm" && birthday.text.trim()) p.birthday = birthday.text.trim()
                     sheet.working = true
                     var reply = sheet.backend.addSeedWallet(JSON.stringify(p))
                     p = {}; sheet.clearSecrets()

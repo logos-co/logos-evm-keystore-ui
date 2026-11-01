@@ -52,7 +52,6 @@ LogosDialog {
     // A device signs on its own screen, and its data has a password of its own.
     readonly property bool onDevice: isOpen && !!(target && target.device)
     readonly property bool firstOpen: onDevice && !target.hasKey
-    readonly property bool birthdayOk: birthday.text.trim() === "" || /^\d{4}-\d{2}-\d{2}$/.test(birthday.text.trim())
     function pickWallet(group) {
         picked = group
         for (var i = 0; i < walletRepeater.count; ++i)
@@ -69,7 +68,6 @@ LogosDialog {
         picked = ""
         pw.text = ""
         pwAgain.text = ""
-        birthday.text = ""
     }
 
     contentItem: ColumnLayout {
@@ -168,14 +166,6 @@ LogosDialog {
             placeholderText: "Type it again"
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
-        // A device keeps no record of when its seed was made; the person may know the day.
-        LogosTextField {
-            id: birthday
-            objectName: "accessBirthdayField"
-            visible: sheet.firstOpen
-            Layout.fillWidth: true
-            placeholderText: "First used on, as YYYY-MM-DD (optional)"
-        }
 
         RowLayout {
             Layout.fillWidth: true
@@ -207,12 +197,11 @@ LogosDialog {
                 text: "Open"
                 enabled: sheet.isOpen && pw.text.length > 0
                          && (!sheet.picks || sheet.picked !== "")
-                         && (!sheet.firstOpen || (pwAgain.text === pw.text && sheet.birthdayOk))
+                         && (!sheet.firstOpen || pwAgain.text === pw.text)
                 onClicked: {
                     var h = sheet.shown.handle
-                    var day = sheet.firstOpen ? birthday.text.trim() : ""
                     logos.watch(sheet.backend.approveAccess(h, sheet.shown.bundle_id,
-                                                           sheet.picks ? sheet.picked : "", pw.text, day),
+                                                           sheet.picks ? sheet.picked : "", pw.text),
                                 function (ok) { if (ok) { sheet.decided(h, true); sheet.close() } })
                     pw.text = ""
                     pwAgain.text = ""
