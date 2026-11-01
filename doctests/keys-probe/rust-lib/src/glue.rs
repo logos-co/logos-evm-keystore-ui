@@ -95,7 +95,6 @@ fn drive(state: Shared) {
             let key_len = text(&v, "databaseKey").len();
             println!("{MARK}_WALLET: {}", text(&v, "group"));
             println!("{MARK}_OPENED: {} databaseKey={key_len} hex chars", text(&v, "external"));
-            println!("{MARK}_STARTS: origin={} birthday={}", text(&v, "origin"), text(&v, "birthday"));
             set!(json!({ "ok": true, "state": "opened", "group": text(&v, "group") }));
             text(&v, "group")
         }
@@ -117,12 +116,7 @@ fn drive(state: Shared) {
     let device = json!({ "group": "mock-segwit", "network": "regtest", "reason": "Doc-test: open the device's wallet" });
     match ask_and_wait(&state, "DEVICE_OPEN", modules().signer_manager_module.request_open(&device.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
-            println!(
-                "{MARK}_DEVICE_OPENED: origin={} birthday={} databaseKey={} hex chars",
-                text(&v, "origin"),
-                text(&v, "birthday"),
-                text(&v, "databaseKey").len()
-            );
+            println!("{MARK}_DEVICE_OPENED: databaseKey={} hex chars", text(&v, "databaseKey").len());
             set!(json!({ "ok": true, "state": "device_opened" }));
         }
         Err(e) => {
@@ -133,12 +127,12 @@ fn drive(state: Shared) {
     }
 }
 
-/// A wallet made in the keys app: its history starts the day it was made.
+/// A wallet made in the keys app, opened for this app.
 fn new_wallet(state: Shared) {
     let ask = json!({ "family": "bitcoin_taproot", "network": "regtest", "reason": "Doc-test: open a new wallet" });
     match ask_and_wait(&state, "NEW_OPEN", modules().signer_manager_module.request_open(&ask.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
-            println!("{MARK}_NEW_STARTS: origin={} birthday={}", text(&v, "origin"), text(&v, "birthday"));
+            println!("{MARK}_NEW_OPENED: {} databaseKey={} hex chars", text(&v, "external"), text(&v, "databaseKey").len());
             *state.lock().unwrap() = json!({ "ok": true, "state": "new_opened" });
         }
         Err(e) => {

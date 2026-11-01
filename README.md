@@ -29,9 +29,6 @@ account is independently encrypted as a standard Web3 V3 JSON file. Bitcoin reta
 encrypted account-key/descriptor format, including both receive and change branches. The optional
 **Keep an encrypted recovery source** writes one separate phrase vault under the same password,
 reused by all selected accounts. A BIP39 passphrase remains separate and is never retained.
-Bitcoin accounts record where their history starts, so apps know where to look for their coins:
-a created phrase starts the day it is made, and a restored one on the day the person gives, which
-Save files asks for as an optional `YYYY-MM-DD`.
 
 **Add accounts…** on a recovery group verifies the saved or re-entered phrase against that group
 before previewing. Existing files, paths, passwords, and legacy derivation keys remain usable.
@@ -269,13 +266,12 @@ python3 doctests/assert_ui.py               # the rest, against an app on port 3
 the `keys_probe` fixture and its app, `keys_probe_ui`, which sends each of the fixture's requests
 to the keys app through Basecamp's `keystore.accounts.open` intent. The fixture asks to open any
 native segwit wallet on regtest before one exists, so the person adds one from the request,
-keeping its phrase and giving the day it was first used, and opens it. The fixture then asks to
-sign two confirmed signatures with it without the password, which the person can only reject,
-and to open a mock device's wallet, which they grant. Then the person shows the descriptor, adds
-an EVM account from the kept phrase without typing it, and shows and forgets the phrase. Last,
-the fixture asks for a taproot wallet, and the person creates one. The spec checks what the
-fixture was handed: the descriptors, a 32-byte database key, where each wallet's history starts,
-and that its request to sign without the password was rejected.
+keeping its phrase, and opens it. The fixture then asks to sign two confirmed signatures with it
+without the password, which the person can only reject, and to open a mock device's wallet, which
+they grant. Then the person shows the descriptor, adds an EVM account from the kept phrase without
+typing it, and shows and forgets the phrase. Last, the fixture asks for a taproot wallet, and the
+person creates one. The spec checks what the fixture was handed: the descriptors, a 32-byte
+database key, and that its request to sign without the password was rejected.
 
 ## Building
 

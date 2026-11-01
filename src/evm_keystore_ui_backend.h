@@ -22,8 +22,7 @@ public:
     void refresh() override;
     void refreshAccess() override;
     bool showAccess(QString handle) override;
-    bool approveAccess(QString handle, QString bundleId, QString group, QString password,
-                       QString birthday) override;
+    bool approveAccess(QString handle, QString bundleId, QString group, QString password) override;
     bool forgetDeviceWallet(QString signer, QString account) override;
     bool rejectAccess(QString handle) override;
     void dismissAccess() override;
@@ -61,11 +60,9 @@ public:
     bool changePassword(QString address, QString oldPassword, QString newPassword) override;
 
     QString importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                          QString password, QString label, QString keepPhrasePassword, QString origin,
-                          QString birthday) override;
+                          QString password, QString label, QString keepPhrasePassword) override;
     QString importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                                  QString family, QString chain, QString password, QString label,
-                                  QString birthday) override;
+                                  QString family, QString chain, QString password, QString label) override;
     QString showPhrase(QString phraseId, QString password) override;
     bool forgetPhrase(QString phraseId) override;
     QString walletDescriptors(QString group) override;

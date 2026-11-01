@@ -1,6 +1,5 @@
 #include "evm_keystore_ui_backend.h"
 
-#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -129,8 +128,7 @@ QString EvmKeystoreUiBackend::importBitcoinWith(QJsonObject p)
 }
 
 QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphrase, QString family, QString chain,
-                                            QString password, QString label, QString keepPhrasePassword,
-                                            QString origin, QString birthday)
+                                            QString password, QString label, QString keepPhrasePassword)
 {
     QJsonObject p;
     p[QStringLiteral("phrase")] = phrase;
@@ -141,10 +139,6 @@ QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphr
     p[QStringLiteral("label")] = label;
     if (!keepPhrasePassword.isEmpty())
         p[QStringLiteral("keepPhrase")] = QJsonObject{ { QStringLiteral("password"), keepPhrasePassword } };
-    // A phrase made here starts today, by the keystore's clock; one brought in, from the day given.
-    p[QStringLiteral("origin")] = origin == QStringLiteral("created") ? origin : QStringLiteral("restored");
-    if (origin != QStringLiteral("created") && !birthday.trimmed().isEmpty())
-        p[QStringLiteral("birthday")] = birthday.trimmed();
     phrase.fill(QChar(0));
     bip39Passphrase.fill(QChar(0));
     password.fill(QChar(0));
@@ -153,8 +147,7 @@ QString EvmKeystoreUiBackend::importBitcoin(QString phrase, QString bip39Passphr
 }
 
 QString EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString phrasePassword, QString bip39Passphrase,
-                                                    QString family, QString chain, QString password, QString label,
-                                                    QString birthday)
+                                                    QString family, QString chain, QString password, QString label)
 {
     QJsonObject p;
     p[QStringLiteral("keptPhrase")] = phraseId;
@@ -164,9 +157,6 @@ QString EvmKeystoreUiBackend::importBitcoinFromKept(QString phraseId, QString ph
     p[QStringLiteral("chain")] = chain;
     p[QStringLiteral("password")] = password;
     p[QStringLiteral("label")] = label;
-    p[QStringLiteral("origin")] = QStringLiteral("restored");
-    if (!birthday.trimmed().isEmpty())
-        p[QStringLiteral("birthday")] = birthday.trimmed();
     phrasePassword.fill(QChar(0));
     bip39Passphrase.fill(QChar(0));
     password.fill(QChar(0));
@@ -285,8 +275,7 @@ bool EvmKeystoreUiBackend::showAccess(QString handle)
     return true;
 }
 
-bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QString group,
-                                         QString password, QString birthday)
+bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QString group, QString password)
 {
     setLastError(QString());
     // Only what is on screen, and refused before the password is used for anything else.
@@ -303,8 +292,6 @@ bool EvmKeystoreUiBackend::approveAccess(QString handle, QString bundleId, QStri
     p[QStringLiteral("password")] = password;
     if (!group.isEmpty())
         p[QStringLiteral("group")] = group;
-    if (!birthday.trimmed().isEmpty())
-        p[QStringLiteral("birthday")] = birthday.trimmed();
     QString body = params(p);
     password.fill(QChar(0));
     const bool good = okManager(modules().signer_manager_module.approve_access(body), QString());
@@ -493,12 +480,6 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
     auto source = p.value(QStringLiteral("source")).toObject();
     // The wallet's name, kept for a new phrase; each account file has its own, empty by default.
     const auto walletName = p.value(QStringLiteral("walletName")).toString().trimmed();
-    // A restored Bitcoin wallet's first day, if the person gave one. A created one starts today,
-    // and so do its accounts read back from the vault it was just kept in, which the keystore
-    // calls restored: a kept phrase is older than the wallet, except this once.
-    const bool created = p.value(QStringLiteral("origin")).toString() == QStringLiteral("created");
-    const auto birthday = created ? QDateTime::currentDateTimeUtc().date().toString(Qt::ISODate)
-                                  : p.value(QStringLiteral("birthday")).toString().trimmed();
     QJsonArray saved;
     QJsonArray groups;
     QString keptId = source.value(QStringLiteral("keptPhrase")).toString();
@@ -546,10 +527,6 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
         request["accountIndex"] = row.value("index");
         const bool bitcoin = row.value("family").toString() != "evm";
-        const bool fromVault = created && source.contains(QStringLiteral("keptPhrase"));
-        request["origin"] = created && !fromVault ? QStringLiteral("created") : QStringLiteral("restored");
-        if (bitcoin && (!created || fromVault) && !birthday.isEmpty())
-            request["birthday"] = birthday;
         if (keep && keptId.isEmpty()) request["keepPhrase"] = QJsonObject{{"password", password}};
         auto body = params(request);
         const auto reply = bitcoin ? modules().keystore_module.import_bitcoin(body)
