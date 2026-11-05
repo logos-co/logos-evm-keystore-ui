@@ -45,6 +45,8 @@ LogosDialog {
     }
     readonly property var proof: proofs.length > proofIndex ? proofs[proofIndex] : null
     readonly property bool needsPassword: sheet.askProof && nameField.text.trim().length > 0 && proof !== null
+    // What clearing the name brings back; empty from an older keystore module.
+    property string defaultName: ""
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
@@ -53,6 +55,7 @@ LogosDialog {
         var seedId = sheet.bundle && sheet.bundle.nodes.length ? (sheet.bundle.nodes[0].group || {}).seedId : ""
         var first = sheet.bundle && sheet.bundle.nodes.length ? sheet.bundle.nodes[0].id : ""
         nameField.text = !sheet.view ? "" : sheet.fileOnly ? sheet.view.walletNameOf(first) : sheet.view.seedNameFor(seedId)
+        sheet.defaultName = !sheet.view || sheet.fileOnly ? "" : sheet.view.seedDefaultNameFor(seedId)
         password.text = ""
         sheet.askProof = false
         sheet.proofIndex = 0
@@ -73,11 +76,15 @@ LogosDialog {
             text: sheet.shownTitle
         }
         LogosText {
+            objectName: "seedWalletNameHint"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: sheet.fileOnly ? "Clearing it shows the wallet by its position again."
-                  : "Every app shows this name for the wallet. Clearing it shows the wallet by its position again."
+                  : sheet.defaultName.length > 0
+                    ? "Every app shows this name for the wallet. Clearing it gives it back its default name, \u201c"
+                      + sheet.defaultName + "\u201d, in every app."
+                    : "Every app shows this name for the wallet. Clearing it shows the wallet by its position again."
         }
         LogosTextField {
             id: nameField

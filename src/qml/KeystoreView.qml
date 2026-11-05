@@ -265,10 +265,18 @@ Item {
         })
         return names.length === 1 ? names[0] : ""
     }
-    // The header over a recovery phrase's account files: its wallet name, else its position.
+    // The name a wallet goes by until someone names it, as the Signer app shows it too.
+    function seedDefaultNameFor(seedId) {
+        if (!seedId) return ""
+        var g = root.groups.find(function (g) { return g.seedId === seedId && g.walletDefaultName })
+        return g ? g.walletDefaultName : ""
+    }
+    // The header over a recovery phrase's account files: its wallet name, else its default, else
+    // its position (an older keystore module gives no default).
     function seedTitleOf(bundle, index) {
         if (!bundle || !bundle.nodes.length) return ""
-        return root.seedNameFor((bundle.nodes[0].group || {}).seedId)
+        var seedId = (bundle.nodes[0].group || {}).seedId
+        return root.seedNameFor(seedId) || root.seedDefaultNameFor(seedId)
                || root.walletNameOf(bundle.nodes[0].id)
                || (bundle.linked ? "Wallet " + (index + 1) : "Wallet — not yet linked")
     }
