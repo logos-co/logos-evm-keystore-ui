@@ -5,17 +5,17 @@
     logos-module-builder.url = "github:logos-co/logos-module-builder";
     # Pinned to the commits that made the keystore a signer and added the manager.
     keystore_module = {
-      url = "github:logos-co/logos-evm-keystore-module/e4c6fcd39411f0ed52083f0a7fb2701e742f81f1";
+      url = "github:logos-co/logos-evm-keystore-module/e83a899a1718ed52e3173dc85d06b15b9c68f41a";
       inputs.logos-module-builder.follows = "logos-module-builder";
     };
     signer_manager_module = {
-      url = "github:logos-co/logos-signer-manager-module/0342cbcd43596b91fa1bda8c1fa3feccf09ef635";
+      url = "github:logos-co/logos-signer-manager-module/bd5c84d21ced71246c4bf44d137aa1c597496fb0";
       inputs.logos-module-builder.follows = "logos-module-builder";
       inputs.keystore_module.follows = "keystore_module";
     };
     # A signer that behaves like a device, so its accounts show beside the keystore's.
     mock_device_signer = {
-      url = "github:logos-co/logos-signer-manager-module/1a385f4e41ef54f388a192037bd9d9aa7165a505?dir=doctests/mock-device";
+      url = "github:logos-co/logos-signer-manager-module/bd5c84d21ced71246c4bf44d137aa1c597496fb0?dir=doctests/mock-device";
       inputs.logos-module-builder.follows = "logos-module-builder";
     };
   };
