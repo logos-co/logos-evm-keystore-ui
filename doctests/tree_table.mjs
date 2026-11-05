@@ -341,5 +341,47 @@ check("what stays there is not offered again", T.olderHolds({ accounts: 0, docum
 check("a fresh install, or an unanswered read, offers nothing",
   [T.olderHolds({}), T.olderHolds(undefined), T.olderSummary({})], [false, false, ""]);
 
+console.log("17) a wallet is one card: a row per account, in the order every app shows them");
+const S1 = "s_seed1";
+const BTC = "g_" + "b".repeat(32), TAP = "g_" + "c".repeat(32), EMPTY = "g_" + "e".repeat(32);
+const cardGroups = [
+  wallet(G1, { seedId: S1, phrase: "p_1" }),
+  wallet(EMPTY, { seedId: S1, pathPrefix: "m/44'/60'/1'", storage: "plain", derivable: false, usedIndices: [], accountCount: 0 }),
+  wallet(BTC, { seedId: S1, family: "bitcoin", chain: "main", pathPrefix: "m/84'/0'/0'", fingerprint: "73c5da0a",
+                preview: { address: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu" } }),
+  wallet(TAP, { seedId: S1, family: "bitcoin_taproot", chain: "test", pathPrefix: "m/86'/1'/0'", preview: { error: "x" } }),
+];
+const cardTree = T.treeOf([A1, A3], prov, cardGroups, [G1, BTC, TAP], {}, { [TAP]: "Savings", [BTC]: "Main" });
+const bundle = T.seedGroupsOf(cardTree).find(b => b.id === S1);
+const entries = T.cardEntries(bundle, prov, { [A3.toLowerCase()]: "Spending" }, cardGroups, { [TAP]: "Savings", [BTC]: "Main" }, "Main");
+check("an EVM file's accounts one row each, a Bitcoin file one row",
+  entries.map(e => [e.family, e.label, e.path]),
+  [["evm", "", "m/44'/60'/0'/0/0"], ["evm", "Spending", "m/44'/60'/0'/0/1"],
+   ["bitcoin", "", "m/84'/0'/0'"], ["bitcoin_taproot", "Savings", "m/86'/1'/0'"]]);
+check("a Bitcoin file named as its wallet carries no name of its own", entries[2].label, "");
+check("its first receiving address, or nothing to show", [entries[2].firstAddress, entries[3].firstAddress],
+  ["bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu", ""]);
+check("each row knows its file", entries.map(e => e.group), [G1, G1, BTC, TAP]);
+check("a path is rebuilt, never echoed",
+  [T.bitcoinPath("m/84'/1'/0'"), T.bitcoinPath("m/84h/1h/0h"), T.bitcoinPath("m/84'/0'/0'/0/0<b>")], ["m/84'/1'/0'", "", ""]);
+check("the Wallet ID: any file's fingerprint, else none",
+  [T.cardFingerprint(bundle), T.cardFingerprint({ nodes: [{ group: { fingerprint: "NOT-HEX!" } }] })], ["73c5da0a", ""]);
+const strips = T.cardStrips(bundle, true, [G1, BTC, TAP], [], true);
+check("strips: the kept phrase, the older key, the empty file, by id",
+  strips.map(x => [x.id, x.group || ""]), [["kept", ""], ["key0", G1], ["empty0", EMPTY]]);
+check("an older key's strip adds and forgets", strips[1].actions.map(a => a.id), ["addone", "forgetkey"]);
+check("with the key directory unread, no strip claims a key or an empty file",
+  T.cardStrips(bundle, false, [], [], false).map(x => x.id), []);
+check("a wallet that needs its phrase again says so first, with the way back",
+  T.cardStrips(Object.assign({}, bundle, { needsPhrase: true }), false, [], [], true).map(x => [x.id, x.warn === true]).slice(0, 1),
+  [["again", true]]);
+check("lines: how it unlocks, or that it isn't linked yet",
+  [T.cardLines(bundle), T.cardLines({ linked: false }).length, T.cardLines({ linked: true, needsPhrase: true })],
+  [["Unlocks with its keystore password."], 1, []]);
+check("what a password change left, each file once, in words",
+  T.leftFiles([{ kind: "wallet", id: BTC }, { kind: "unlock", id: BTC }, { kind: "phrase", id: "p_1" },
+               { kind: "account", id: "v1", address: A1 }], cardGroups),
+  ["a Bitcoin account file", "the kept recovery phrase", "Ethereum account 0x9992…0001"]);
+
 console.log(failed ? `\n${failed} FAILED` : "\nall passed");
 process.exit(failed ? 1 : 0);

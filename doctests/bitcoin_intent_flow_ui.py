@@ -68,7 +68,11 @@ for i, (family, network) in enumerate([('bitcoin', 'bitcoin'), ('bitcoin', 'regt
     click('flowSelect_0')
     click('flowReview')
     setp('flowPassword', 'text', PASSWORD)
-    setp('flowRepeatPassword', 'text', PASSWORD)
+    if i == 0:
+        setp('flowRepeatPassword', 'text', PASSWORD)
+    else:
+        # The kept phrase's wallet already has a password: the new file takes it, asked once.
+        assert not value('visible', 'flowRepeatPassword')
     if i == 0:
         click('flowKeepRecovery')
     click('flowSave')

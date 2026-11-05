@@ -67,6 +67,8 @@ public:
     bool forgetPhrase(QString phraseId) override;
     QString walletDescriptors(QString group) override;
     bool deleteAccount(QString address, QString password) override;
+    bool deleteBitcoinAccount(QString group, QString password) override;
+    QString changeWalletPassword(QString seed, QString passwordsJson, QString newPassword) override;
 
 protected:
     void onContextReady() override;

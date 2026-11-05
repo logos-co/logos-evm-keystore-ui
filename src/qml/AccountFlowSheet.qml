@@ -20,8 +20,19 @@ LogosDialog {
     property string presetFamily: ""
     property string presetChain: ""
     property var phrases: []
+    property var fileGroups: []
     readonly property bool requested: requestHandle !== ""
     property string sourceGroup: ""
+    // Added to this wallet (its seed): the new files take its password, asked once.
+    property string walletSeed: ""
+    readonly property bool joining: walletSeed !== ""
+    // A kept phrase's wallet: the seed of the files it made.
+    function seedOfKept(id) {
+        var p = phrases.filter(function(x) { return x.id === id })[0]
+        var first = p && (p.groups || []).length ? p.groups[0] : ""
+        var g = fileGroups.filter(function(x) { return x.id === first })[0]
+        return g && g.seedId ? g.seedId : ""
+    }
     property string keptId: ""
     property bool needsPassphrase: false
     property int step: 0
@@ -89,6 +100,7 @@ LogosDialog {
         var named = selected.map(function(r) { return Object.assign({}, r, { name: (names[r.key] || "").trim() }) })
         var p = { source: source(), selected: named, walletName: sourceGroup ? "" : groupName.text.trim(), password: password.text,
                   keepRecovery: keep.checked && !keptId }
+        if (joining) p.wallet = walletSeed
         logos.watch(backend.saveAccounts(JSON.stringify(p)), function(reply) {
             working = false
             var r
@@ -111,7 +123,7 @@ LogosDialog {
         wordCountPicker.currentIndex = 0
         if (mode === "create") generatePhrase()
     }
-    onClosed: { generation++; working = false; clearSecrets(); rows = []; selected = []; names = ({}); sourceGroup = ""; keptId = ""; needsPassphrase = false; notice = ""; requestHandle = ""; presetFamily = ""; presetChain = "" }
+    onClosed: { generation++; working = false; clearSecrets(); rows = []; selected = []; names = ({}); sourceGroup = ""; walletSeed = ""; keptId = ""; needsPassphrase = false; notice = ""; requestHandle = ""; presetFamily = ""; presetChain = "" }
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
         LogosText {
@@ -152,7 +164,7 @@ LogosDialog {
                         LogosButton {
                             objectName: "flowUseKept"; text: "Use saved recovery source"
                             enabled: keptSource.currentIndex >= 0
-                            onClicked: { sheet.mode = "extend"; sheet.keptId = sheet.phrases[keptSource.currentIndex].id; sheet.step = 0 }
+                            onClicked: { sheet.mode = "extend"; sheet.keptId = sheet.phrases[keptSource.currentIndex].id; sheet.walletSeed = sheet.seedOfKept(sheet.keptId); sheet.step = 0 }
                         }
                     }
                     LogosButton { visible: !sheet.requested; text: "Private key"; Layout.fillWidth: true; onClicked: { sheet.close(); sheet.importKey() } }
@@ -333,8 +345,14 @@ LogosDialog {
                             }
                         }
                     }
-                    LogosTextField { id: password; objectName: "flowPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Password for the new files" }
-                    LogosTextField { id: repeatPassword; objectName: "flowRepeatPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Confirm password" }
+                    LogosTextField { id: password; objectName: "flowPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: sheet.joining ? "The wallet's password" : "Password for the new files" }
+                    LogosTextField { id: repeatPassword; objectName: "flowRepeatPassword"; Layout.fillWidth: true; visible: !sheet.joining; echoMode: TextInput.Password; placeholderText: "Confirm password" }
+                    LogosText {
+                        objectName: "flowWalletPassword"
+                        visible: sheet.joining
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
+                        text: "One password opens every account of a wallet, so the new ones take the one it already uses."
+                    }
                     RowLayout {
                         visible: !sheet.keptId
                         LogosCheckbox { id: keep; objectName: "flowKeepRecovery"; text: "Keep an encrypted recovery source" }
@@ -360,7 +378,7 @@ LogosDialog {
             LogosButton { objectName: "flowCancel"; text: "Cancel"; enabled: !sheet.working; onClicked: sheet.close() }
             LogosButton {
                 objectName: "flowBack"; text: "Back"; visible: sheet.step > 0 || (sheet.requested && sheet.step === 0); enabled: !sheet.working
-                onClicked: { if (sheet.step === 0) { sheet.clearSecrets(); sheet.keptId = ""; hasPassphrase.checked = false; sheet.mode = "request" }; sheet.step--; sheet.notice = ""; if (sheet.step === 0) { sheet.rows = []; sheet.selected = [] } }
+                onClicked: { if (sheet.step === 0) { sheet.clearSecrets(); sheet.keptId = ""; sheet.walletSeed = ""; hasPassphrase.checked = false; sheet.mode = "request" }; sheet.step--; sheet.notice = ""; if (sheet.step === 0) { sheet.rows = []; sheet.selected = [] } }
             }
             Item { Layout.fillWidth: true }
             LogosButton {
@@ -374,7 +392,8 @@ LogosDialog {
             LogosButton { objectName: "flowReview"; visible: sheet.step === 1; text: "Continue"; enabled: !sheet.working && sheet.selected.length > 0; onClicked: sheet.step = 2 }
             LogosButton {
                 objectName: "flowSave"; visible: sheet.step === 2; text: sheet.working ? "Saving…" : "Save " + sheet.selected.length + " account(s)"
-                enabled: !sheet.working && sheet.selected.length > 0 && password.text.length > 0 && password.text === repeatPassword.text
+                enabled: !sheet.working && sheet.selected.length > 0 && password.text.length > 0
+                         && (sheet.joining || password.text === repeatPassword.text)
                 onClicked: sheet.saveSelection()
             }
         }
