@@ -55,6 +55,9 @@ an older derivation key (**Add account…**, **Stop keeping…**), an empty Ethe
   what is still under another one, so each of those is asked for once.
 - **Renaming** asks for no password while the Signer app has the wallet unlocked. The sheets try
   without one first and ask only when the keystore refuses.
+- **An account's name** is the one the Signer app shows too: an Ethereum account's is its
+  address's label (`set_label`, also when it is named while being added), a Bitcoin account's
+  is its file's.
 - An account no wallet holds (imported, or from a wallet not listed here) keeps its own row and
   its own password: **Rename…**, **Remove…**, **Export…** and **Password…**.
 

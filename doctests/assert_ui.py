@@ -627,6 +627,9 @@ check("Add accounts takes the wallet's password, checked before anything is writ
 check("an app's request that reuses a kept phrase joins that phrase's wallet too",
       "sheet.walletSeed = sheet.seedOfKept(sheet.keptId)" in code(text("AccountFlowSheet.qml"))
       and "fileGroups: root.groups" in code(view), True)
+check("an EVM account named while being added gets its address's label, which the card shows",
+      "keystore_module.set_label(" in block(backend, "QString EvmKeystoreUiBackend::saveAccounts(", 96)
+      and 'request["groupLabel"]' not in block(backend, "QString EvmKeystoreUiBackend::saveAccounts(", 96), True)
 check("a Bitcoin account can be removed", "deleteBitcoinAccount(QString group, QString password)" in rep
       and "keystore_module.delete_bitcoin_account(" in backend, True)
 check("an EVM file goes with its last account", "keystore_module.remove_group(params(p));"

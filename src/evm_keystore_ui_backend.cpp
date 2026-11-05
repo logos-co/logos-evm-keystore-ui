@@ -536,11 +536,13 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         request["password"] = password;
         request["storage"] = "plain";
         const auto name = row.value(QStringLiteral("name")).toString().trimmed();
-        request["groupLabel"] = name; request["label"] = name; request["walletName"] = walletName;
+        const bool bitcoin = row.value("family").toString() != "evm";
+        // A Bitcoin account's name is its file's; an EVM account's is its address's, set below.
+        if (bitcoin) request["label"] = name;
+        request["walletName"] = walletName;
         request["family"] = row.value("family"); request["chain"] = row.value("chain");
         request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
         request["accountIndex"] = row.value("index");
-        const bool bitcoin = row.value("family").toString() != "evm";
         if (keep && keptId.isEmpty()) request["keepPhrase"] = QJsonObject{{"password", password}};
         auto body = params(request);
         const auto reply = bitcoin ? modules().keystore_module.import_bitcoin(body)
@@ -548,6 +550,10 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         body.fill(QChar(0)); request = {};
         if (!ok(reply, QStringLiteral("save account"))) break;
         saved.append(row.value("key"));
+        // The label the card and the Signer app show; a refusal leaves the account saved, unnamed.
+        if (!bitcoin && !name.isEmpty())
+            ok(modules().keystore_module.set_label(parseObject(reply).value("address").toString(), name, password),
+               QStringLiteral("name the account"));
         const auto group = parseObject(reply).value("group").toString();
         if (!group.isEmpty()) groups.append(group);
         if (keep && keptId.isEmpty()) {

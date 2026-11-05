@@ -109,7 +109,8 @@ LogosDialog {
             selected = selected.filter(function(row) { return done.indexOf(row.key) < 0 })
             if (r.keptPhrase && !keptId) { keptId = r.keptPhrase; phrasePw.text = password.text; words.text = ""; generated = "" }
             password.text = ""; repeatPassword.text = ""
-            if (!r.error && selected.length === 0) { sheet.saved(r.groups || []); sheet.close() }
+            // Every account saved: what went wrong after that, such as a name, stays in the view.
+            if (selected.length === 0) { sheet.saved(r.groups || []); sheet.close() }
             else notice = (done.length ? "Saved " + done.length + " account(s). Remaining accounts were not saved. " : "") + (r.error || "Check the file list before retrying.")
         })
         p = {}
