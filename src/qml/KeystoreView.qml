@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import Logos.Controls
 import Logos.Theme
 import "tree.js" as Tree
+import "accountkit" as Accounts
 import "accountkit/roster.js" as Roster
 
 // The keystore: the only surface that creates, imports, exports or deletes an account. Which
@@ -192,17 +193,6 @@ Item {
         next[id] = !next[id]
         root.collapsed = next
     }
-    // A wallet that needs its phrase again shows its account files only when asked.
-    function filesShown(bundle) {
-        var k = "files:" + bundle.id
-        return root.collapsed[k] === undefined ? !bundle.needsPhrase : root.collapsed[k] !== true
-    }
-    function toggleFiles(bundle) {
-        var next = {}
-        for (var k in root.collapsed) next[k] = root.collapsed[k]
-        next["files:" + bundle.id] = root.filesShown(bundle)
-        root.collapsed = next
-    }
     function openAddAgain(bundle) {
         var g = bundle.nodes[0].group
         addAgainSheet.group = g.id
@@ -280,7 +270,7 @@ Item {
         if (!bundle || !bundle.nodes.length) return ""
         return root.seedNameFor((bundle.nodes[0].group || {}).seedId)
                || root.walletNameOf(bundle.nodes[0].id)
-               || (bundle.linked ? "Recovery source " + (index + 1) : "Recovery source — not yet linked")
+               || (bundle.linked ? "Wallet " + (index + 1) : "Wallet — not yet linked")
     }
     function seedTitleForGroup(groupId) {
         for (var i = 0; i < root.seedNodes.length; ++i)
@@ -460,7 +450,93 @@ Item {
         return []
     }
 
-    property string selected: ""
+    // ── Wallet cards ───────────────────────────────────────────────────────────────
+    // A recovery phrase's account files are one wallet, drawn as every app draws one: its rows,
+    // each account's own actions on it, and the wallet's at the top and bottom.
+    function seedOf(bundle) {
+        return bundle && bundle.nodes.length ? String((bundle.nodes[0].group || {}).seedId || "") : ""
+    }
+    function cardAccounts(bundle) {
+        return Tree.cardEntries(bundle, root.provenance, root.labels, root.groups, root.walletNames,
+                                root.seedNameFor(root.seedOf(bundle)))
+    }
+    // A build that isn't the custodian is offered nothing that changes the keystore.
+    function gated(strips) {
+        return strips.map(function (s) {
+            var c = Object.assign({}, s)
+            c.actions = (s.actions || []).map(function (a) {
+                return Object.assign({}, a, { enabled: root.custodian && a.enabled !== false })
+            })
+            return c
+        })
+    }
+    function rowActions(entry) {
+        var on = root.custodian
+        return [{ id: "rename", label: "Rename…", enabled: on }, { id: "remove", label: "Remove…", enabled: on },
+                entry.family === "evm" ? { id: "export", label: "Export…", enabled: on }
+                                       : { id: "descriptor", label: "Descriptor…" }]
+    }
+    // An account no wallet holds keeps a password of its own.
+    readonly property var looseActions: [
+        { id: "rename", label: "Rename…", enabled: root.custodian },
+        { id: "remove", label: "Remove…", enabled: root.custodian },
+        { id: "export", label: "Export…", enabled: root.custodian },
+        { id: "password", label: "Password…", enabled: root.custodian }]
+    function walletActions(bundle) {
+        if (!bundle || !bundle.seed) return []
+        var out = [{ id: "rename", label: "Rename…", enabled: root.custodian }]
+        // One added before wallets could be locked has no wallet password until its phrase comes again.
+        if (bundle.linked && !bundle.needsPhrase)
+            out.push({ id: "password", label: "Change password…", enabled: root.custodian })
+        return out
+    }
+    function walletAction(bundle, index, id) {
+        if (id === "add") {
+            accountFlow.mode = "extend"
+            accountFlow.sourceGroup = bundle.nodes[0].group.id
+            accountFlow.walletSeed = bundle.linked ? root.seedOf(bundle) : ""
+            accountFlow.keptId = root.keptForSeed(bundle)
+            accountFlow.needsPassphrase = bundle.nodes.some(function (n) { return n.group.usedPassphrase })
+            accountFlow.open()
+        } else if (id === "rename") {
+            walletNameSheet.bundle = bundle
+            walletNameSheet.fileOnly = !bundle.linked
+            walletNameSheet.shownTitle = root.seedTitleOf(bundle, index)
+            walletNameSheet.open()
+        } else if (id === "password") {
+            walletPasswordSheet.seed = root.seedOf(bundle)
+            walletPasswordSheet.shownTitle = root.seedTitleOf(bundle, index)
+            walletPasswordSheet.open()
+        }
+    }
+    function stripAction(bundle, strip, id) {
+        var g = strip && strip.group ? Tree.groupById(root.groups, strip.group) : null
+        if (id === "addphrase") root.openAddAgain(bundle)
+        else if (id === "phrase") {
+            var kept = root.keptForSeed(bundle)
+            keptPhraseSheet.kept = root.phrases.filter(function (p) { return p.id === kept })[0] || null
+            if (keptPhraseSheet.kept) keptPhraseSheet.open()
+        }
+        else if (id === "addone" && g) { addSheet.group = g; addSheet.open() }
+        else if (id === "forgetkey" && g) { forgetKeyDialog.group = g; forgetKeyDialog.open() }
+        else if (id === "removefile" && g) { removeWalletDialog.group = g; removeWalletDialog.open() }
+    }
+    function accountAction(id, entry) {
+        if (id === "rename") { renameAccountSheet.entry = entry; renameAccountSheet.open() }
+        else if (id === "remove") { removeAccountSheet.entry = entry; removeAccountSheet.open() }
+        else if (id === "export") { exportAccountSheet.address = entry.address; exportAccountSheet.open() }
+        else if (id === "password") { accountPasswordSheet.address = entry.address; accountPasswordSheet.open() }
+        else if (id === "descriptor") {
+            bitcoinWalletSheet.group = Tree.groupById(root.groups, entry.group)
+            bitcoinWalletSheet.rowTitle = Roster.rowTitle(entry) + (Roster.rowId(entry) ? " · " + Roster.rowId(entry) : "")
+            bitcoinWalletSheet.open()
+        }
+    }
+    // A phrase a card shows on its own strip; the others are listed above the wallets.
+    readonly property var cardPhraseIds: root.seedNodes.filter(function (b) { return b.seed })
+        .map(function (b) { return root.keptForSeed(b) }).filter(function (id) { return id !== "" })
+    readonly property var loosePhrases: root.phrases.filter(function (p) { return root.cardPhraseIds.indexOf(p.id) < 0 })
+
 
     ColumnLayout {
         anchors.fill: parent
@@ -566,11 +642,13 @@ Item {
         ColumnLayout {
             objectName: "keptPhrases"
             Layout.fillWidth: true
-            visible: root.phrases.length > 0
+            visible: root.loosePhrases.length > 0
+            // Every kept phrase, those the cards show included.
+            readonly property int kept: root.phrases.length
             spacing: Theme.spacing.tiny
             LogosText { text: "Encrypted recovery sources"; font.bold: true }
             Repeater {
-                model: root.phrases
+                model: root.loosePhrases
                 delegate: RowLayout {
                     Layout.fillWidth: true
                     LogosText {
@@ -686,72 +764,37 @@ Item {
                             required property var modelData
                             required property int index
                             readonly property var bundle: modelData
+                            readonly property string keptId: bundle.seed ? root.keptForSeed(bundle) : ""
                             Layout.fillWidth: true
                             spacing: Theme.spacing.small
-                            RowLayout {
+
+                            // A wallet: one recovery phrase over its account files, as every app shows one.
+                            Accounts.WalletCard {
+                                id: card
                                 visible: seedBranch.bundle.seed
                                 Layout.fillWidth: true
-                                LogosText {
-                                    objectName: "seedTitle_" + seedBranch.index
-                                    Layout.fillWidth: true
-                                    font.bold: true
-                                    textFormat: Text.PlainText
-                                    text: root.seedTitleOf(seedBranch.bundle, seedBranch.index)
-                                }
-                                LogosButton {
-                                    objectName: "renameSeedWallet_" + seedBranch.index
-                                    visible: seedBranch.bundle.linked
-                                    text: "Rename…"
-                                    enabled: root.custodian
-                                    onClicked: {
-                                        walletNameSheet.bundle = seedBranch.bundle
-                                        walletNameSheet.shownTitle = root.seedTitleOf(seedBranch.bundle, seedBranch.index)
-                                        walletNameSheet.open()
-                                    }
-                                }
-                                LogosButton {
-                                    objectName: "addPhraseAgain_" + seedBranch.index
-                                    visible: seedBranch.bundle.needsPhrase
-                                    text: "Add recovery phrase again…"
-                                    enabled: root.custodian
-                                    onClicked: root.openAddAgain(seedBranch.bundle)
-                                }
-                                LogosButton {
-                                    objectName: "addSeedWallet_" + seedBranch.index
-                                    visible: !seedBranch.bundle.needsPhrase
-                                    text: "Add accounts…"
-                                    enabled: root.custodian
-                                    onClicked: {
-                                        accountFlow.mode = "extend"
-                                        accountFlow.sourceGroup = seedBranch.bundle.nodes[0].group.id
-                                        accountFlow.keptId = root.keptForSeed(seedBranch.bundle)
-                                        accountFlow.needsPassphrase = seedBranch.bundle.nodes.some(function(n) { return n.group.usedPassphrase })
-                                        accountFlow.open()
-                                    }
-                                }
+                                namePrefix: "wallet" + seedBranch.index + "_"
+                                title: seedBranch.bundle.seed ? root.seedTitleOf(seedBranch.bundle, seedBranch.index) : ""
+                                fingerprint: seedBranch.bundle.seed ? Tree.cardFingerprint(seedBranch.bundle) : ""
+                                lines: seedBranch.bundle.seed ? Tree.cardLines(seedBranch.bundle) : []
+                                strips: seedBranch.bundle.seed
+                                        ? root.gated(Tree.cardStrips(seedBranch.bundle, seedBranch.keptId !== "", root.derivationKeys,
+                                                                     root.stagedKeys, root.keyDirectoryKnown))
+                                        : []
+                                accounts: seedBranch.bundle.seed ? root.cardAccounts(seedBranch.bundle) : []
+                                emptyText: "No accounts yet."
+                                actions: seedBranch.bundle.needsPhrase ? []
+                                         : [{ id: "add", label: "Add accounts…", enabled: root.custodian }]
+                                accountActions: root.rowActions
+                                rightActions: root.walletActions(seedBranch.bundle)
+                                onAction: function (id) { root.walletAction(seedBranch.bundle, seedBranch.index, id) }
+                                onStripAction: function (i, id) { root.stripAction(seedBranch.bundle, card.strips[i], id) }
+                                onAccountAction: function (id, entry) { root.accountAction(id, entry) }
                             }
-                            LogosText {
-                                objectName: "seedNote_" + seedBranch.index
-                                visible: seedBranch.bundle.seed
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                color: seedBranch.bundle.needsPhrase ? Theme.palette.warning : Theme.palette.textSecondary
-                                text: seedBranch.bundle.needsPhrase
-                                      ? "Added before wallets could be locked. It can't sign until you add its recovery "
-                                        + "phrase again, and until then it is stored unencrypted on this computer."
-                                      : seedBranch.bundle.linked
-                                      ? "Account files from the same recovery source."
-                                      : "Add a wallet with this recovery phrase to verify and group its existing wallets."
-                            }
-                            LogosButton {
-                                objectName: "seedFiles_" + seedBranch.index
-                                visible: seedBranch.bundle.needsPhrase
-                                compact: true
-                                text: root.filesShown(seedBranch.bundle) ? "Hide its account files" : "Show its account files"
-                                onClicked: root.toggleFiles(seedBranch.bundle)
-                            }
+
+                            // Accounts no wallet claims, and keys or names no record accounts for.
                             Repeater {
-                                model: root.filesShown(seedBranch.bundle) ? seedBranch.bundle.nodes : []
+                                model: seedBranch.bundle.seed ? [] : seedBranch.bundle.nodes
                                 delegate: AccountGroupNode {
                                     Layout.fillWidth: true
                                     view: root
@@ -762,39 +805,31 @@ Item {
                                     noteColor: root.nodeNoteColor(modelData)
                                     badges: root.nodeBadges(modelData)
                                     addresses: modelData.addresses
-                                    bitcoinGroup: modelData.group && modelData.group.family ? modelData.group : null
+                                    bitcoinGroup: null
                                     prefix: modelData.prefix
                                     emptyLine: root.nodeEmptyLine(modelData)
                                     unreadLine: root.nodeUnreadLine(modelData)
                                     expanded: root.collapsed[modelData.id] !== true
 
-                                    addVisible: modelData.kind === "wallet" && modelData.group.derivable === true
-                                                && !modelData.group.family
+                                    addVisible: false
                                     addEnabled: root.custodian
                                     addBlockedLine: ""
                                     // A key frame is nameable too: its title is what the user has to
                                     // recognise before deciding whether to delete a live key.
-                                    manageVisible: modelData.kind === "wallet" || modelData.kind === "nameOnly"
-                                                   || root.isKeyFrame(modelData)
+                                    manageVisible: modelData.kind === "nameOnly" || root.isKeyFrame(modelData)
                                     manageEnabled: root.custodian
                                     deleteKeyVisible: root.isKeyFrame(modelData)
                                     deleteKeyEnabled: root.custodian
                                     rowActionText: modelData.kind === "notAdded" ? "Add to the Signer app…" : ""
+                                    accountActions: root.looseActions
 
                                     onToggleRequested: root.toggle(modelData.id)
                                     onRowActionRequested: function (address) { addAgainSheet.account = address; addAgainSheet.open() }
-                                    onAddRequested: { addSheet.group = modelData.group; addSheet.open() }
                                     onManageWalletRequested: {
-                                        if (modelData.group && modelData.group.family) {
-                                            bitcoinWalletSheet.group = modelData.group
-                                            bitcoinWalletSheet.rowTitle = root.nodeTitle(modelData)
-                                            bitcoinWalletSheet.open()
-                                            return
-                                        }
                                         walletSheet.group = modelData.group
                                         walletSheet.rowTitle = root.nodeTitle(modelData)
-                                        walletSheet.seedLinked = !!(modelData.group && modelData.group.seedId)
-                                        walletSheet.phraseKept = seedBranch.bundle.linked && root.keptForSeed(seedBranch.bundle) !== ""
+                                        walletSheet.seedLinked = false
+                                        walletSheet.phraseKept = false
                                         walletSheet.stranded = root.isKeyFrame(modelData)
                                         walletSheet.recordKnown = modelData.kind !== "unreadKey"
                                         walletSheet.addresses = modelData.addresses
@@ -804,7 +839,11 @@ Item {
                                         walletSheet.removable = root.walletRemovable(modelData)
                                         walletSheet.open()
                                     }
-                                    onManageAccountRequested: function (address) { root.selected = address; manageSheet.open() }
+                                    onAccountActionRequested: function (id, address) {
+                                        root.accountAction(id, { key: address, family: "evm", address: address,
+                                                                 label: root.labelFor(address),
+                                                                 path: root.hdPath((root.provFor(address) || {}).path) })
+                                    }
                                     onForgetKeyRequested: logos.watch(root.backend.forgetDerivation(modelData.id),
                                                                       function () {})
                                 }
@@ -933,6 +972,7 @@ Item {
         id: accountFlow
         backend: root.backend
         phrases: root.phrases
+        fileGroups: root.groups
         onSaved: function(groups) {
             if (accountFlow.requestHandle && accessSheet.opened && accessSheet.shown.handle === accountFlow.requestHandle && groups.length)
                 accessSheet.pickWallet(groups[0])
@@ -1037,124 +1077,53 @@ Item {
         }
     }
 
-    // ── Manage one account: provenance, rename, change password, export, delete ────
-    LogosDialog {
-        id: manageSheet
-        objectName: "manageSheet"
-        title: "Manage account"
+    // ── One account: its name, removal and export, and its own password where no wallet holds it ──
+    RenameAccountSheet { id: renameAccountSheet; backend: root.backend }
+    RemoveAccountSheet { id: removeAccountSheet; backend: root.backend; view: root }
+    ExportAccountSheet { id: exportAccountSheet; backend: root.backend }
+    AccountPasswordSheet { id: accountPasswordSheet; backend: root.backend }
+    WalletPasswordSheet { id: walletPasswordSheet; backend: root.backend; view: root }
+
+    // ── Stop keeping an older file's derivation key ────────────────────────────────
+    // A wallet action, offered once on the file's strip. No password: a key nobody can open
+    // any more is exactly the one worth removing.
+    LogosWarningDialog {
+        id: forgetKeyDialog
+        objectName: "forgetKeyDialog"
+        title: "Stop keeping the derivation key?"
+        accentColor: Theme.palette.error
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
 
-        property string exported: ""
-        onOpened: {
-            exported = ""
-            renameField.text = root.labelFor(root.selected)
-            renamePw.text = ""
-            oldPw.text = ""; newPw2.text = ""; exportPw.text = ""; deletePw.text = ""
-        }
-        onClosed: exported = ""
+        property var group: null
+        onOpened: forgetKeyAck.checked = false
+        onClosed: { forgetKeyAck.checked = false; group = null }
 
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
-
-            // The button, not LogosCopyableText: this is the one place the WHOLE address is
-            // shown, and LogosSelectableText cannot wrap — it would clip it instead.
-            RowLayout {
-                Layout.fillWidth: true
-                LogosText {
-                    objectName: "manageAddress"
-                    textFormat: Text.PlainText
-                    Layout.fillWidth: true
-                    wrapMode: Text.WrapAnywhere
-                    text: root.selected
-                }
-                LogosCopyButton { objectName: "manageAddressCopy"; value: root.selected }
-            }
             LogosText {
-                objectName: "manageProvenance"
-                textFormat: Text.PlainText
+                objectName: "forgetKeyWarning"
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                color: Theme.palette.textSecondary
-                text: root.originLine(root.selected)
+                text: "This file keeps a derivation key, so accounts can be added without its recovery "
+                      + "phrase. Removing it cannot be undone, and it does not need the key's password — a "
+                      + "key you can no longer open is exactly the one worth removing. The accounts you "
+                      + "already have keep working exactly as they do now — they simply stop being "
+                      + "extendable, so adding another means typing the phrase again."
             }
-
-            LogosText { text: "Name"; color: Theme.palette.textSecondary }
+            LogosCheckbox { id: forgetKeyAck; objectName: "forgetKeyAck"; text: "I understand this cannot be undone" }
             RowLayout {
                 Layout.fillWidth: true
-                LogosTextField { id: renameField; objectName: "renameField"; Layout.fillWidth: true; placeholderText: "Account name" }
+                LogosButton { objectName: "forgetKeyCancel"; text: "Cancel"; onClicked: forgetKeyDialog.close() }
+                Item { Layout.fillWidth: true }
                 LogosButton {
-                    objectName: "renameConfirm"
-                    text: "Rename"
-                    // Clearing needs nothing; setting needs the password. Both are enabled
-                    // states, so the button never sits dead with no way to see why.
-                    enabled: renameField.text.trim().length === 0 || renamePw.text.length > 0
-                    onClicked: logos.watch(root.backend.setLabel(root.selected, renameField.text,
-                                                                 renamePw.text),
-                        function (good) { if (good) renamePw.text = "" })
+                    objectName: "forgetKeyConfirm"
+                    text: "Stop keeping the derivation key"
+                    enabled: forgetKeyAck.checked && forgetKeyDialog.group !== null
+                    onClicked: logos.watch(root.backend.forgetDerivation(forgetKeyDialog.group.id),
+                        function (good) { if (good) forgetKeyDialog.close() })
                 }
             }
-            LogosTextField {
-                id: renamePw
-                objectName: "renamePasswordField"
-                Layout.fillWidth: true
-                visible: renameField.text.trim().length > 0
-                echoMode: TextInput.Password
-                placeholderText: "This account's password, to set a name"
-            }
-            LogosText {
-                objectName: "renameNeedsPassword"
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Theme.palette.textSecondary
-                text: renameField.text.trim().length > 0
-                      ? "A name is what other screens show in place of this address, so setting "
-                        + "one asks for this account's password."
-                      : "Clearing a name asks for nothing: with none, screens show the address "
-                        + "itself, which cannot stand in for another account."
-            }
-
-            LogosText { text: "Change password"; color: Theme.palette.textSecondary }
-            LogosTextField { id: oldPw;  objectName: "oldPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Current password" }
-            LogosTextField { id: newPw2; objectName: "newPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "New password" }
-            LogosButton {
-                objectName: "changePasswordConfirm"
-                text: "Change password"
-                enabled: oldPw.text.length > 0 && newPw2.text.length > 0
-                onClicked: logos.watch(root.backend.changePassword(root.selected, oldPw.text, newPw2.text),
-                    function (good) { if (good) { oldPw.text = ""; newPw2.text = "" } })
-            }
-
-            LogosText { text: "Export"; color: Theme.palette.textSecondary }
-            LogosTextField { id: exportPw; objectName: "exportPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Password" }
-            LogosButton {
-                objectName: "exportConfirm"
-                text: "Export vault JSON"
-                enabled: exportPw.text.length > 0
-                onClicked: logos.watch(root.backend.exportVaultJson(root.selected, exportPw.text),
-                    function (vault) { manageSheet.exported = vault || "" })
-            }
-            LogosText {
-                objectName: "exportedVault"
-                visible: manageSheet.exported.length > 0
-                Layout.fillWidth: true
-                textFormat: Text.PlainText
-                wrapMode: Text.WrapAnywhere
-                // Shown so it can be copied, and dropped when the sheet closes.
-                text: manageSheet.exported
-            }
-
-            LogosText { text: "Delete"; color: Theme.palette.error }
-            LogosTextField { id: deletePw; objectName: "deletePasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Password, to confirm" }
-            LogosButton {
-                objectName: "deleteConfirm"
-                text: "Delete this account"
-                enabled: deletePw.text.length > 0
-                onClicked: logos.watch(root.backend.deleteAccount(root.selected, deletePw.text),
-                    function (good) { if (good) manageSheet.close() })
-            }
-
-            LogosButton { objectName: "manageClose"; text: "Close"; onClicked: manageSheet.close() }
         }
     }
 }

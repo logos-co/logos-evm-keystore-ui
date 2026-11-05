@@ -30,9 +30,36 @@ encrypted account-key/descriptor format, including both receive and change branc
 **Keep an encrypted recovery source** writes one separate phrase vault under the same password,
 reused by all selected accounts. A BIP39 passphrase remains separate and is never retained.
 
-**Add accounts…** on a recovery group verifies the saved or re-entered phrase against that group
-before previewing. Existing files, paths, passwords, and legacy derivation keys remain usable.
-Legacy derivable wallets also retain their existing **Add account** action.
+**Add accounts** on a wallet verifies the saved or re-entered phrase against that wallet before
+previewing, and the new files take the wallet's password: it is asked once, checked with
+`opens_wallet` before anything is written, and never chosen again. An open request that reuses a
+saved recovery source joins that source's wallet the same way. Existing files, paths and legacy
+derivation keys remain usable; an older file that keeps a derivation key offers **Add account…**
+on its wallet's card.
+
+## One card per wallet
+
+A wallet is drawn as the Signer and Keycard apps draw it, with
+[logos-account-kit](https://github.com/logos-co/logos-account-kit)'s `WalletCard`: its name, its
+**Wallet ID** (the master fingerprint, from `list_groups`' `fingerprint`), and one row per account
+with its name, number, derivation path and address (a Bitcoin account's first receiving address).
+What only this app knows sits on the card as strips: a kept recovery phrase (**Show or forget…**),
+an older derivation key (**Add account…**, **Stop keeping…**), an empty Ethereum file
+(**Remove…**), and a wallet whose phrase has to come again.
+
+- **Each row:** **Rename…**, **Remove…**, and **Export…** (Ethereum) or **Descriptor…** (Bitcoin).
+  Removing a Bitcoin account uses `delete_bitcoin_account`; an Ethereum file left with no account
+  is removed with it.
+- **The wallet:** **Add accounts**, **Rename…** and **Change password…**. One password opens every
+  file of a wallet: `change_wallet_password` moves each file the given password opens, and names
+  what is still under another one, so each of those is asked for once.
+- **Renaming** asks for no password while the Signer app has the wallet unlocked. The sheets try
+  without one first and ask only when the keystore refuses.
+- **An account's name** is the one the Signer app shows too: an Ethereum account's is its
+  address's label (`set_label`, also when it is named while being added), a Bitcoin account's
+  is its file's.
+- An account no wallet holds (imported, or from a wallet not listed here) keeps its own row and
+  its own password: **Rename…**, **Remove…**, **Export…** and **Password…**.
 
 The backend checks the entire selection before saving, refuses duplicates, and reports the
 successful subset on an I/O failure. The UI removes saved selections before retrying, so a
@@ -66,7 +93,9 @@ signer holding it. The kit is vendored in `src/qml/accountkit`.
 | Save selected Ethereum / Bitcoin accounts | `import_mnemonic` / `import_bitcoin` |
 | Import / export standard Ethereum JSON | `import_keystore_json` / `export_keystore_json` |
 | Legacy derivation key preview / add | `preview_addresses` / `derive_account_at` / `derive_next_account` |
-| Manage account / wallet files | existing label, password, export and deletion APIs |
+| Rename an account / a wallet | `set_label` / `set_wallet_name` |
+| Remove an Ethereum / Bitcoin account | `delete_account` (then `remove_group`) / `delete_bitcoin_account` |
+| Change a wallet's password | `change_wallet_password`; a loose account's: `change_password` |
 | Manage encrypted recovery sources | `list_phrases`, `show_phrase`, `forget_phrase` |
 
 ## The tree
@@ -90,15 +119,14 @@ nothing on record says: `provenance_view` falls back to `Provenance::of("unknown
 account with no entry, so a vault copied into the directory by hand lands there beside one that
 predates the record. The keystore never guesses which, and neither does this.
 
-**Each account shows its full derivation path and copyable address.** Wallet headers still
-identify their shared prefix; the account row puts its name above the full path and address,
-matching Keycard. A missing path is shown as “Not recorded”. Ethereum and Bitcoin details
+**Each account shows its full derivation path and copyable address.** On a wallet's card each
+row puts the account's name and number above the full path and address, as every app does. A missing path is shown as “Not recorded”. Ethereum and Bitcoin details
 share the same left alignment; the full path carries the account index without an extra badge.
 
 **The address is copyable, and what gets copied is the whole one.** The row shows
 `0x1234…abcd`; `LogosCopyableText` carries the full 42 characters as `copyText`. The name beside
 it is a separate item because it is a separate string — the name is user-typed and elides, the
-short address is a fixed 13 characters and does not. In the Manage sheet, where the whole
+short address is a fixed 13 characters and does not. In the Export sheet, where the whole
 address is shown and wrapped, a `LogosCopyButton` is added beside the text instead:
 `LogosSelectableText` cannot wrap, it clips.
 
@@ -110,7 +138,7 @@ unnamed wallet is `Wallet 1`, `Wallet 2`, numbered down the list of wallet frame
 It was the wallet's first account, which is where the name went wrong: `delete_account` retires
 that account's provenance entry, so deleting account #0 silently renamed the wallet in the node
 header, in both sheets and in every origin line at once. An ordinal cannot move for anything an
-account does. It *can* move when another wallet is imported, which is what the Manage sheet says
+account does. It *can* move when another wallet is imported, which is what the Rename sheet says
 where the name is typed — the shipped pattern elsewhere is exactly this, an editable placeholder
 over a stable ordinal.
 
@@ -209,6 +237,8 @@ an address in its account picker. Setting an account name now needs that account
 password. Setting a wallet name needs the password of **one of its accounts** — any one: holding
 an account is exactly the claim the header makes about the accounts beneath it, and the group
 password would prove only that you can *make* accounts, not that you own the ones it names.
+A wallet the Signer app has unlocked this session is named with no password at all, which is
+why both rename sheets ask first without one.
 
 Where the wallet has **no** accounts but still keeps a derivation key, that rejection has
 nothing to reach — there are no accounts to own, and the only thing the name will come to stand
@@ -269,7 +299,8 @@ native segwit wallet on regtest before one exists, so the person adds one from t
 keeping its phrase, and opens it. The fixture then asks to sign two confirmed signatures with it
 without the password, which the person can only reject, and to open a mock device's wallet, which
 they grant. Then the person shows the descriptor, adds an EVM account from the kept phrase without
-typing it, and shows and forgets the phrase. Last, the fixture asks for a taproot wallet, and the
+typing it (under the wallet's password, asked once), renames the wallet without a password, and
+shows and forgets the phrase. Last, the fixture asks for a taproot wallet, and the
 person creates one. The spec checks what the fixture was handed: the descriptors, a 32-byte
 database key, and that its request to sign without the password was rejected.
 

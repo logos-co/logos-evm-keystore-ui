@@ -303,8 +303,8 @@ check("hdPath answers nothing rather than a failure word",
       'return m ? "m/44\'/60\'/" + m[0] + "\'/" + m[1] + "/" + m[2] : ""' in view, True)
 # The wallet name now reaches the origin line, which is the one sentence that renders a name
 # outside a title. LogosText is a bare Text, i.e. AutoText.
-check("the origin line is PlainText",
-      "textFormat: Text.PlainText" in block(view, 'objectName: "manageProvenance"'), True)
+check("the origin line, now on the removal sheet, is PlainText",
+      "textFormat: Text.PlainText" in block(text("RemoveAccountSheet.qml"), 'objectName: "removeAccountProvenance"'), True)
 
 print("0b2) a refused read is not an empty answer")
 rep, backend = srctext("evm_keystore_ui.rep"), srctext("evm_keystore_ui_backend.cpp")
@@ -446,12 +446,13 @@ check("the name is a separate item, because it is a separate string",
       'objectName: "accountName_" + modelData' in code(node), True)
 check("the name elides; the address is a fixed 13 characters and does not",
       "elide: Text.ElideRight" in block(node, 'objectName: "accountName_" + modelData'), True)
-# The Manage sheet shows all 42 characters and WRAPS. LogosSelectableText cannot wrap — it
+# The export sheet shows all 42 characters and WRAPS. LogosSelectableText cannot wrap — it
 # clips — so the button is added beside the text instead of the control being swapped.
+export = text("ExportAccountSheet.qml")
 check("the whole address is copyable where it is shown whole",
-      'objectName: "manageAddressCopy"' in code(view), True)
+      'objectName: "exportAddressCopy"' in code(export), True)
 check("and it is still wrapping text there, not a clipping one",
-      "wrapMode: Text.WrapAnywhere" in block(view, 'objectName: "manageAddress"'), True)
+      "wrapMode: Text.WrapAnywhere" in block(export, 'objectName: "exportAddress"'), True)
 
 print("0m) a name is a claim of custody, so setting one has to prove it")
 # A name is the one string on this screen an attacker chooses and a human reads, and a wallet
@@ -460,12 +461,16 @@ check("the account rename carries a password",
       "setLabel(QString address, QString label, QString password)" in rep, True)
 check("and the wallet rename carries one of its own accounts, with that account's password",
       "setWalletName(QString group, QString name, QString address, QString password)" in rep, True)
-check("the field is on the account sheet", 'objectName: "renamePasswordField"' in code(view), True)
+# Asked once the keystore refuses: a wallet the Signer app unlocked this session takes a name
+# with none, and one it didn't still proves custody.
+rename = text("RenameAccountSheet.qml")
+check("the field is on the account's rename sheet", 'objectName: "renameAccountPassword"' in code(rename), True)
+check("and shown only after a refusal", "else if (name.length > 0) sheet.askPassword = true" in code(rename), True)
 check("and on the wallet sheet", 'objectName: "walletNamePasswordField"' in code(manage), True)
 # Clearing is exempt on purpose: it can only move the display TOWARD the raw address, and it
 # is the one way to strip a stale name off an account whose password is lost.
 check("clearing an account name still asks for nothing",
-      "renameField.text.trim().length === 0 || renamePw.text.length > 0" in code(view), True)
+      "nameField.text.trim().length === 0 || password.text.length > 0" in code(rename), True)
 check("and the wallet rename asks only where there is something to prove",
       "!sheet.needsCredential || credPw.text.length > 0" in code(manage), True)
 # "Has no accounts" was read as "holds nothing", so a DERIVABLE wallet with none could be
@@ -503,8 +508,8 @@ check("and the sentence is shown on exactly that",
 # gain an account, so that stays true" — said over a wallet that kept one.
 check("and it no longer claims a keyless wallet where the key was never checked",
       "keeps no derivation key can never gain an" in code(manage), False)
-check("the account rename says which of the two it is doing",
-      'objectName: "renameNeedsPassword"' in code(view), True)
+check("the account rename says why it asks",
+      'objectName: "renameAccountNeedsPassword"' in code(rename), True)
 
 print("0n) a wallet that holds nothing can be removed, and the confirmation says what is lost")
 # forget_derivation removes the KEY and answers NotFound when there is none, so a wallet with
@@ -557,10 +562,12 @@ print("0p) an older build's wallet says what it needs, and offers it")
 # the Signer app", where it isn't. The keystore names it now; this screen is where it is fixed.
 again = text("AddAgainSheet.qml")
 check("the keystore's list reaches the view", 'j(backend.addAgainJson, "[]")' in view, True)
-check("the wallet's header says why it can't sign, and that it is stored unencrypted",
-      "It can't sign until you add its recovery" in view and "stored unencrypted on this computer" in view, True)
-check("and its account files fold away until asked for", "root.filesShown(seedBranch.bundle)" in view, True)
-check("the phrase is offered there", "root.openAddAgain(seedBranch.bundle)" in view, True)
+treesrc = speech((QML / "tree.js").read_text())
+check("the wallet's card says why it can't sign, and that it is stored unencrypted",
+      "It can't sign until you add its recovery phrase again" in treesrc
+      and "stored unencrypted on this computer" in treesrc, True)
+check("the phrase is offered on that strip", 'id: "addphrase"' in treesrc
+      and 'if (id === "addphrase") root.openAddAgain(bundle)' in code(view), True)
 check("an older key is offered its own button", '"Add to the Signer app…"' in view, True)
 check("the sheet sends one call, and clears what was typed",
       "backend.restoreUnlockRoot(JSON.stringify(p))" in again and "clearSecrets()" in again, True)
@@ -598,6 +605,39 @@ check("what stays there is named, as plain text",
 # Possible key material is a report: the keystore refuses nothing on it any more.
 check("the key directory notice no longer claims creating is refused",
       "creating an account is refused" in view, False)
+
+print("0s) a wallet is the shared card, and each account's actions sit on its row")
+# The Signer, Keycard and Keys apps draw a wallet alike: its name and Wallet ID (the master
+# fingerprint), one row per account with its path and address, and each app's own actions.
+check("a recovery phrase's files are one WalletCard", "Accounts.WalletCard" in code(view), True)
+check("its rows, strips and ID are decided in tree.js",
+      all(f in code(view) for f in ("Tree.cardEntries(", "Tree.cardStrips(", "Tree.cardFingerprint(")), True)
+check("Rename… and Remove… on every row, Export… or Descriptor… beside them",
+      all(f in code(view) for f in ('id: "rename", label: "Rename…"', 'id: "remove", label: "Remove…"',
+                                    'id: "export", label: "Export…"', 'id: "descriptor", label: "Descriptor…"')), True)
+check("and the per-account Manage sheet is gone", "manageSheet" in code(view), False)
+check("Change password… is the wallet's, not an account's",
+      'id: "password", label: "Change password…"' in code(view)
+      and "changeWalletPassword(QString seed, QString passwordsJson, QString newPassword)" in rep, True)
+check("each password the keystore left is asked once, then the call again",
+      "sheet.tried.concat(" in code(text("WalletPasswordSheet.qml")), True)
+check("Add accounts takes the wallet's password, checked before anything is written",
+      "if (joining) p.wallet = walletSeed" in code(text("AccountFlowSheet.qml"))
+      and "keystore_module.opens_wallet(" in backend, True)
+check("an app's request that reuses a kept phrase joins that phrase's wallet too",
+      "sheet.walletSeed = sheet.seedOfKept(sheet.keptId)" in code(text("AccountFlowSheet.qml"))
+      and "fileGroups: root.groups" in code(view), True)
+check("an EVM account named while being added gets its address's label, which the card shows",
+      "keystore_module.set_label(" in block(backend, "QString EvmKeystoreUiBackend::saveAccounts(", 96)
+      and 'request["groupLabel"]' not in block(backend, "QString EvmKeystoreUiBackend::saveAccounts(", 96), True)
+check("a Bitcoin account can be removed", "deleteBitcoinAccount(QString group, QString password)" in rep
+      and "keystore_module.delete_bitcoin_account(" in backend, True)
+check("an EVM file goes with its last account", "keystore_module.remove_group(params(p));"
+      in block(backend, "bool EvmKeystoreUiBackend::deleteAccount(", 30), True)
+check("an older file's derivation key is a strip, confirmed before it goes",
+      'id: "forgetkey"' in treesrc and 'objectName: "forgetKeyConfirm"' in code(view), True)
+check("the file's own name is no longer offered on a wallet's file",
+      "walletSheet.seedLinked = false" in code(view), True)
 
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)
@@ -669,51 +709,38 @@ check("no node kind outside the taxonomy",
        if n["kind"] not in ("wallet", "stranded", "unreadKey", "imported", "random",
                             "orphan", "unrecorded", "flat")], [])
 
-print("3) two wallets are told apart by their PARENT, not by a badge that names both alike")
-wallets = [n for n in tree if n["kind"] == "wallet"]
-titles = [ev(f'nodeTitle({{kind:"wallet",id:"{w["id"]}",group:groups.filter(function(g)'
-             f'{{return g.id==="{w["id"]}"}})[0],addresses:[],countKnown:true}})')
-          for w in wallets]
+print("3) each wallet is a card, told apart by its name, never by an id or an address")
+cards = js("JSON.stringify(seedNodes.map(function(b,i){return {i:i,seed:b.seed}}).filter(function(c){return c.seed}))") or []
+titles = [props(f"wallet{c['i']}_Title").get("text") for c in cards]
 print(f"    wallet titles: {titles}")
 check("no two wallets share a title", len(set(titles)), len(titles))
-# A title is a name or an ordinal. It was the wallet's first account, and it was never the hex.
-check("no title is a bare hex id",
-      [t for t in titles if re.fullmatch(r"Wallet [0-9a-f]{8}", str(t))], [])
+check("no title is a bare hex id", [t for t in titles if re.fullmatch(r"Wallet [0-9a-f]{8}", str(t))], [])
 check("nor an address", [t for t in titles if "…" in str(t) or "0x" in str(t)], [])
 check("and none is empty", [t for t in titles if not str(t).strip()], [])
+check("a Wallet ID is the master fingerprint, where one is shown",
+      [c["i"] for c in cards if props(f"wallet{c['i']}_WalletId").get("visible")
+       and not re.fullmatch(r"[0-9a-f]{8}", str(props(f"wallet{c['i']}_WalletId").get("text")))], [])
 
-print("4) a wallet's node carries the shared prefix; its children carry only what varies")
-for w in wallets:
-    sub = props(f"nodeSubtitle_{w['id']}").get("text") or ""
-    check(f"{w['id'][:10]} names its path once", bool(re.search(r"m/44'/60'/\d+'", sub)), True)
-kids = js("JSON.stringify(nodes.filter(function(n){return n.kind==='wallet'})"
-          ".map(function(n){return n.addresses.map(function(a){return badgeFor(a,n.prefix)"
-          ".text})}))") or []
-print(f"    child badges: {kids}")
-check("no child badge repeats a path",
-      [b for row in kids for b in row if "/" in str(b)], [])
+print("4) every row states its whole path, and its address is the one copied")
+for c in cards:
+    k = 0
+    while oid(f"wallet{c['i']}_Account_{k}") is not None:
+        row = f"wallet{c['i']}_Account_{k}"
+        path = props(row + "_Path").get("text") or ""
+        check(f"{row} path", bool(re.fullmatch(r"m/44'/60'/\d+'/\d+/\d+|m/8[46]'/[01]'/\d+'", path)), True)
+        copy = props(row + "_Copy")
+        if copy.get("visible"):
+            check(f"{row} copies the whole address", len(str(copy.get("value"))) > 20, True)
+        k += 1
 
-print("5) add account sits on the wallet it adds to")
+print("5) Add accounts sits on the wallet it adds to")
 check("no global add button", oid("addAccountButton") is None, True)
-if wallets:
-    w = wallets[0]
-    check("the wallet's own add button", oid(f"nodeAdd_{w['id']}") is not None, True)
-    click(f"nodeAdd_{w['id']}")
-    check("the sheet opened", props("addAccountSheet").get("opened"), True)
-    check("and it names the wallet it will add to",
-          props("addAccountWallet").get("text"), titles[0])
-    check("with no wallet picker", oid("walletPicker") is None, True)
-    click("addAccountClose")
-
-print("6) a node folds away, and takes its accounts with it")
-if wallets and wallets[0]["n"] > 0:
-    first = js(f"JSON.stringify(nodes.filter(function(n){{return n.id==='{wallets[0]['id']}'}})"
-               "[0].addresses[0])")
-    check("the account is on screen", props(f"account_{first}").get("visible"), True)
-    click(f"nodeDisclosure_{wallets[0]['id']}")
-    check("folded away", oid(f"account_{first}") is None, True)
-    click(f"nodeDisclosure_{wallets[0]['id']}")
-    check("and back", props(f"account_{first}").get("visible"), True)
+if cards:
+    c = cards[0]["i"]
+    if oid(f"wallet{c}_Action_add") is not None:
+        click(f"wallet{c}_Action_add")
+        check("the account wizard opened", props("accountFlowSheet").get("opened"), True)
+        click("flowCancel")
 
 print("7) creating a key from randomness is not reachable from this screen")
 check("no toolbar action", oid("unrelatedKeyButton") is None, True)
@@ -729,17 +756,6 @@ unknown = js("JSON.stringify(nodes.filter(function(n){return n.countKnown===fals
 check("a frame whose count was not read says so, and says nothing else",
       [i for i in unknown if (props(f"nodeEmpty_{i}").get("text") or "")
        or not (props(f"nodeUnread_{i}").get("text") or "")], [])
-
-print("9) a row states its whole path, not an ordinal")
-if wallets and wallets[0]["n"] > 0:
-    one = js(f"JSON.stringify(nodes.filter(function(n){{return n.id==='{wallets[0]['id']}'}})"
-             "[0].addresses[0])")
-    check("the row states its whole path, not an ordinal",
-          (oid(f"index_{one}") is None,
-           bool(re.search(r"m/44'/60'/\d+'/\d+/\d+", props(f"path_{one}").get("text") or ""))),
-          (True, True))
-    check("and the address beside it is the copyable control",
-          props(f"account_{one}").get("copyText"), one)
 
 print("10) removing a wallet is offered only where the view can show it holds nothing")
 offered = js("JSON.stringify(nodes.filter(function(n){return walletRemovable(n)})"

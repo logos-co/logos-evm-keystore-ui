@@ -339,3 +339,126 @@ function olderSummary(o) {
     if (parts.length === 0 && (o.documents || []).length > 0) parts.push("wallet names and records")
     return parts.join(", ")
 }
+
+// ── Wallet cards ───────────────────────────────────────────────────────────────────────────
+// A seed's account files as the shared card shows them: an EVM file's accounts one row each, a
+// Bitcoin file one row. Entries are the kit's, plus the `group` file they belong to.
+
+function labelOf(labels, address) {
+    var k = norm(address)
+    for (var key in (labels || {})) if (norm(key) === k) return String(labels[key] || "").trim()
+    return ""
+}
+
+// Rebuilt from its parts, like an EVM path: a record can't put text of its own here.
+function bitcoinPath(path) {
+    var m = /^m\/(84|86)'\/([01])'\/(\d+)'$/.exec(String(path || ""))
+    return m ? "m/" + m[1] + "'/" + m[2] + "'/" + parseInt(m[3], 10) + "'" : ""
+}
+
+function cardEntries(bundle, provenance, labels, groups, walletNames, seedName) {
+    var out = []
+    var nodes = (bundle && bundle.nodes) || []
+    for (var i = 0; i < nodes.length; ++i) {
+        var n = nodes[i]
+        if (n.kind !== "wallet" || !n.group) continue
+        var g = n.group
+        if (g.family) {
+            // Its own name: the wallet's, which an older build copied onto each file, is not one.
+            var own = nameOf(groups, walletNames, g.id)
+            var prev = g.preview || {}
+            out.push({ key: g.id, group: g.id, family: g.family === "bitcoin_taproot" ? "bitcoin_taproot" : "bitcoin",
+                       chain: g.chain === "main" ? "main" : "test", path: bitcoinPath(g.pathPrefix),
+                       label: own !== seedName ? own : "",
+                       firstAddress: typeof prev.address === "string" ? prev.address : "",
+                       addressNote: "Address unavailable" })
+            continue
+        }
+        var mine = n.addresses || []
+        for (var k = 0; k < mine.length; ++k) {
+            var m = parsePath((provOf(provenance, mine[k]) || {}).path)
+            out.push({ key: mine[k], group: g.id, family: "evm", address: mine[k],
+                       path: m ? "m/44'/60'/" + m[0] + "'/" + m[1] + "/" + m[2] : "",
+                       label: labelOf(labels, mine[k]) })
+        }
+    }
+    return out
+}
+
+// The Wallet ID: the seed's master fingerprint, as any of its files records it.
+function cardFingerprint(bundle) {
+    var nodes = (bundle && bundle.nodes) || []
+    for (var i = 0; i < nodes.length; ++i) {
+        var f = nodes[i].group ? String(nodes[i].group.fingerprint || "") : ""
+        if (/^[0-9a-f]{8}$/.test(f)) return f
+    }
+    return ""
+}
+
+function cardLines(bundle) {
+    if (!bundle || bundle.needsPhrase) return []
+    return bundle.linked ? ["Unlocks with its keystore password."]
+                         : ["Not linked to a recovery phrase yet: add a wallet with its phrase to check it and group its files."]
+}
+
+// What a card says between its title and its rows, each strip named by its id: a wallet that
+// needs its phrase again, the phrase kept here, an older file still keeping its derivation key,
+// an interrupted import and an empty file. With the key directory unread, no strip claims a key.
+function cardStrips(bundle, kept, keys, staged, keysKnown) {
+    var out = []
+    if (!bundle) return out
+    if (bundle.needsPhrase)
+        out.push({ id: "again", warn: true,
+                   text: "Added before wallets could be locked. It can't sign until you add its recovery phrase "
+                         + "again, and until then it is stored unencrypted on this computer.",
+                   actions: [{ id: "addphrase", label: "Add recovery phrase again…" }] })
+    if (kept)
+        out.push({ id: "kept", text: "Recovery phrase kept here, encrypted",
+                   actions: [{ id: "phrase", label: "Show or forget…" }] })
+    var nodes = bundle.nodes || []
+    var nKey = 0, nStaged = 0, nEmpty = 0
+    for (var i = 0; i < nodes.length; ++i) {
+        var n = nodes[i]
+        if (n.kind !== "wallet" || !n.group || n.group.family) continue
+        var id = String(n.group.id)
+        var p = parsePrefix(n.group.pathPrefix)
+        var where = p >= 0 ? " (m/44'/60'/" + p + "')" : ""
+        var onDisk = keysKnown !== false && (keys || []).indexOf(id) !== -1
+        var stagedHere = (staged || []).indexOf(id) !== -1 || n.group.staged === true
+        if (onDisk)
+            out.push({ id: "key" + nKey++, group: id,
+                       text: "An older file keeps the Ethereum derivation key" + where
+                             + ", so accounts can be added without the phrase.",
+                       actions: [{ id: "addone", label: "Add account…", enabled: n.group.derivable === true },
+                                 { id: "forgetkey", label: "Stop keeping…" }] })
+        if (stagedHere)
+            out.push({ id: "staged" + nStaged++, group: id, warn: true,
+                       text: "An interrupted import left a copy of an Ethereum derivation key" + where
+                             + " here. It opens the whole wallet, so its file stays while the copy is here." })
+        if (keysKnown !== false && !onDisk && !stagedHere && n.countKnown === true && (n.addresses || []).length === 0)
+            out.push({ id: "empty" + nEmpty++, group: id,
+                       text: "An empty Ethereum file" + where + ": no accounts and no derivation key.",
+                       actions: [{ id: "removefile", label: "Remove…" }] })
+    }
+    return out
+}
+
+// What a wallet password change left under another password, in words, each file once.
+function leftFiles(left, groups) {
+    var seen = {}, out = []
+    ;(left || []).forEach(function (l) {
+        var kind = String(l && l.kind || "")
+        var key = (kind === "account" || kind === "phrase" ? kind : "file") + ":" + String(l && l.id || "")
+        if (seen[key]) return
+        seen[key] = true
+        if (kind === "account") {
+            var a = String(l.address || "")
+            out.push("Ethereum account " + (a.length > 12 ? a.substring(0, 6) + "…" + a.substring(a.length - 4) : a))
+        } else if (kind === "phrase") out.push("the kept recovery phrase")
+        else {
+            var g = groupById(groups, l.id)
+            out.push(g && g.family ? "a Bitcoin account file" : "an Ethereum account file")
+        }
+    })
+    return out
+}

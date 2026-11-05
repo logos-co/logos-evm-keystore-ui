@@ -41,13 +41,15 @@ LogosFrame {
     property bool deleteKeyVisible: false
     property bool deleteKeyEnabled: false
     property bool expanded: true
-    // An action of each account's own, beside Manage: "" for none.
+    // An action of each account's own, before the others: "" for none.
     property string rowActionText: ""
+    // Each account's own actions, as { id, label, enabled }: Rename…, Remove… and the rest.
+    property var accountActions: []
 
     signal toggleRequested()
     signal addRequested()
     signal manageWalletRequested()
-    signal manageAccountRequested(string address)
+    signal accountActionRequested(string id, string address)
     signal forgetKeyRequested()
     signal rowActionRequested(string address)
 
@@ -264,11 +266,18 @@ LogosFrame {
                     enabled: node.view.custodian
                     onClicked: node.rowActionRequested(modelData)
                 }
-                LogosButton {
-                    objectName: "manage_" + modelData
-                    text: "Manage"
-                    enabled: node.view.custodian
-                    onClicked: node.manageAccountRequested(modelData)
+                Repeater {
+                    id: rowButtons
+                    readonly property string address: modelData
+                    model: node.accountActions
+                    delegate: LogosButton {
+                        required property var modelData
+                        objectName: modelData.id + "_" + rowButtons.address
+                        text: modelData.label
+                        enabled: modelData.enabled !== false
+                        Component.onCompleted: if ("compact" in this) this["compact"] = true
+                        onClicked: node.accountActionRequested(modelData.id, rowButtons.address)
+                    }
                 }
             }
         }

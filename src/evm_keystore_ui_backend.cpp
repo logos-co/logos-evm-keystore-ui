@@ -494,6 +494,20 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         say(QStringLiteral("Choose 1–20 accounts and a password for the new files."));
         return result();
     }
+    // Added to a wallet, new files take its password: one that opens none of its files is refused.
+    const QString wallet = p.take(QStringLiteral("wallet")).toString();
+    if (!wallet.isEmpty()) {
+        QString body = params(QJsonObject{{"seed", wallet}, {"password", password}});
+        const QString reply = modules().keystore_module.opens_wallet(body);
+        body.fill(QChar(0));
+        if (!ok(reply, QStringLiteral("check the wallet's password")))
+            return result();
+        if (!parseObject(reply).value(QStringLiteral("opens")).toBool()) {
+            say(QStringLiteral("That isn't this wallet's password. New accounts take the password "
+                               "its other accounts use."));
+            return result();
+        }
+    }
     // Validate the entire selection before writing. In particular, existing files must
     // never be overwritten or re-encrypted just because the same phrase was imported.
     QSet<QString> seen;
@@ -522,11 +536,13 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         request["password"] = password;
         request["storage"] = "plain";
         const auto name = row.value(QStringLiteral("name")).toString().trimmed();
-        request["groupLabel"] = name; request["label"] = name; request["walletName"] = walletName;
+        const bool bitcoin = row.value("family").toString() != "evm";
+        // A Bitcoin account's name is its file's; an EVM account's is its address's, set below.
+        if (bitcoin) request["label"] = name;
+        request["walletName"] = walletName;
         request["family"] = row.value("family"); request["chain"] = row.value("chain");
         request["account"] = row.value("account"); request["bip44Account"] = row.value("account");
         request["accountIndex"] = row.value("index");
-        const bool bitcoin = row.value("family").toString() != "evm";
         if (keep && keptId.isEmpty()) request["keepPhrase"] = QJsonObject{{"password", password}};
         auto body = params(request);
         const auto reply = bitcoin ? modules().keystore_module.import_bitcoin(body)
@@ -534,6 +550,10 @@ QString EvmKeystoreUiBackend::saveAccounts(QString paramsJson)
         body.fill(QChar(0)); request = {};
         if (!ok(reply, QStringLiteral("save account"))) break;
         saved.append(row.value("key"));
+        // The label the card and the Signer app show; a refusal leaves the account saved, unnamed.
+        if (!bitcoin && !name.isEmpty())
+            ok(modules().keystore_module.set_label(parseObject(reply).value("address").toString(), name, password),
+               QStringLiteral("name the account"));
         const auto group = parseObject(reply).value("group").toString();
         if (!group.isEmpty()) groups.append(group);
         if (keep && keptId.isEmpty()) {
@@ -783,15 +803,67 @@ bool EvmKeystoreUiBackend::changePassword(QString address, QString oldPassword, 
 bool EvmKeystoreUiBackend::deleteAccount(QString address, QString password)
 {
     setLastError(QString());
+    // The file it was derived into, read before the provenance entry goes with it.
+    const QJsonObject prov = parseObject(modules().keystore_module.get_provenance())
+                                 .value(QStringLiteral("accounts")).toObject();
+    QString group;
+    for (auto it = prov.begin(); it != prov.end(); ++it)
+        if (it.key().compare(address, Qt::CaseInsensitive) == 0)
+            group = it.value().toObject().value(QStringLiteral("group")).toString();
     // delete_account answers a bare bool: a refusal and a wrong password are indistinguishable
     // there by construction, so there is no message to surface beyond this.
     const bool good = modules().keystore_module.delete_account(address, password);
-    if (good)
-        refresh();
-    else
+    if (!good) {
         say(QStringLiteral("could not delete the account — wrong password, or this build is "
                            "not the configured custodian"));
+        return false;
+    }
+    // Its file goes with its last account. The keystore refuses while the file holds another
+    // account or a key, so a refusal here only means the file stays, and is not reported.
+    if (!group.isEmpty()) {
+        QJsonObject p;
+        p[QStringLiteral("group")] = group;
+        modules().keystore_module.remove_group(params(p));
+    }
+    refresh();
+    return true;
+}
+
+bool EvmKeystoreUiBackend::deleteBitcoinAccount(QString group, QString password)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("group")] = group;
+    p[QStringLiteral("password")] = password;
+    password.fill(QChar(0));
+    QString body = params(p);
+    p = {};
+    const bool good = ok(modules().keystore_module.delete_bitcoin_account(body), QStringLiteral("remove account"));
+    body.fill(QChar(0));
+    if (good)
+        refresh();
     return good;
+}
+
+QString EvmKeystoreUiBackend::changeWalletPassword(QString seed, QString passwordsJson, QString newPassword)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("seed")] = seed;
+    p[QStringLiteral("passwords")] = QJsonDocument::fromJson(passwordsJson.toUtf8()).array();
+    p[QStringLiteral("newPassword")] = newPassword;
+    passwordsJson.fill(QChar(0));
+    newPassword.fill(QChar(0));
+    QString body = params(p);
+    p = {};
+    const QString reply = modules().keystore_module.change_wallet_password(body);
+    body.fill(QChar(0));
+    if (!ok(reply, QStringLiteral("change the wallet's password")))
+        return {};
+    QJsonObject o = parseObject(reply);
+    o.remove(QStringLiteral("ok"));
+    refresh();
+    return compact(o);
 }
 
 // Add an older build's wallet again. The phrase and the password go to the keystore only.

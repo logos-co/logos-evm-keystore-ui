@@ -50,8 +50,9 @@ def select_coin(n):
 
 def save():
     click('flowReview')
+    # Joining a wallet asks for its password once; there is nothing to repeat.
+    assert value('visible', 'flowRepeatPassword') is False
     setp('flowPassword', 'text', 'flow-test-password')
-    setp('flowRepeatPassword', 'text', 'flow-test-password')
     click('flowSave')
     wait('!working', 'accountFlowSheet')
 
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     assert value('groups.every(function(g) { return !g.family ? !g.derivable : true })')
     print('PASS: selection survives pagination and coin changes; independent EVM files plus a Bitcoin account share one encrypted source', flush=True)
 
-    click('addSeedWallet_0')
+    click('wallet0_Action_add')
     setp('flowPhrasePassword', 'text', 'wrong')
     click('flowContinue'); wait('!working', 'accountFlowSheet')
     assert value('step === 0 && notice.length > 0', 'accountFlowSheet')
@@ -116,12 +117,21 @@ if __name__ == '__main__':
     assert value('seedNodes.length') == 1
     print('PASS: saved source adds Taproot; wrong credentials and already-saved accounts are rejected', flush=True)
 
-    for address in value('accounts'):
-        assert value('copyText', 'account_' + address).lower() == address.lower()
-        assert value('text', 'path_' + address).startswith("Derivation path: m/44'/60'/0'/0/")
-    for group in value('groups.filter(function(g) { return !!g.family })'):
-        assert group['preview']['address'].startswith('bc1')
-        assert group['preview']['path'] == group['pathPrefix'] + '/0/0'
-        assert value('copyText', 'bitcoinAddress_' + group['id']) == group['preview']['address']
-        assert value('text', 'bitcoinPath_' + group['id']) == 'Derivation path: ' + group['pathPrefix']
+    # One card, one row per account, in the order every app shows them.
+    rows = value('rows', 'wallet0_Card')
+    assert [r['family'] for r in rows] == ['evm', 'evm', 'bitcoin', 'bitcoin_taproot'], rows
+    by_group = {g['id']: g for g in value('groups')}
+    for i, r in enumerate(rows):
+        row = 'wallet0_Account_%d_' % i
+        assert value('text', row + 'Path') == r['path']
+        if r['family'] == 'evm':
+            assert r['path'].startswith("m/44'/60'/0'/0/")
+            assert r['address'].lower() in [a.lower() for a in value('accounts')]
+            assert value('value', row + 'Copy') == r['address']
+        else:
+            group = by_group[r['group']]
+            assert r['path'] == group['pathPrefix']
+            assert r['firstAddress'] == group['preview']['address'] and r['firstAddress'].startswith('bc1')
+            assert group['preview']['path'] == group['pathPrefix'] + '/0/0'
+            assert value('value', row + 'Copy') == r['firstAddress']
     print('PASS: Ethereum, SegWit and Taproot rows show paths and full copy values', flush=True)
