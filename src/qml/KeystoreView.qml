@@ -490,9 +490,11 @@ Item {
         { id: "remove", label: "Remove…", enabled: root.custodian },
         { id: "export", label: "Export…", enabled: root.custodian },
         { id: "password", label: "Password…", enabled: root.custodian }]
+    // All three act on the whole wallet, so they sit together beside its name.
     function walletActions(bundle) {
         if (!bundle || !bundle.seed) return []
-        var out = [{ id: "rename", label: "Rename…", enabled: root.custodian }]
+        var out = bundle.needsPhrase ? [] : [{ id: "add", label: "Add accounts…", enabled: root.custodian }]
+        out.push({ id: "rename", label: "Rename…", enabled: root.custodian })
         // One added before wallets could be locked has no wallet password until its phrase comes again.
         if (bundle.linked && !bundle.needsPhrase)
             out.push({ id: "password", label: "Change password…", enabled: root.custodian })
@@ -791,10 +793,8 @@ Item {
                                         : []
                                 accounts: seedBranch.bundle.seed ? root.cardAccounts(seedBranch.bundle) : []
                                 emptyText: "No accounts yet."
-                                actions: seedBranch.bundle.needsPhrase ? []
-                                         : [{ id: "add", label: "Add accounts…", enabled: root.custodian }]
+                                actions: root.walletActions(seedBranch.bundle)
                                 accountActions: root.rowActions
-                                rightActions: root.walletActions(seedBranch.bundle)
                                 onAction: function (id) { root.walletAction(seedBranch.bundle, seedBranch.index, id) }
                                 onStripAction: function (i, id) { root.stripAction(seedBranch.bundle, card.strips[i], id) }
                                 onAccountAction: function (id, entry) { root.accountAction(id, entry) }
