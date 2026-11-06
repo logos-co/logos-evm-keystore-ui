@@ -619,7 +619,7 @@ check("and the per-account Manage sheet is gone", "manageSheet" in code(view), F
 check("Change password… is the wallet's, not an account's",
       'id: "password", label: "Change password…"' in code(view)
       and "changeWalletPassword(QString seed, QString passwordsJson, QString newPassword)" in rep, True)
-check("Add accounts…, Rename… and Change password… sit together beside the wallet's name",
+check("Add accounts…, Rename…, Change password… and Remove wallet… sit together beside the wallet's name",
       "actions: root.walletActions(seedBranch.bundle)" in code(view)
       and "leftActions:" not in code(view) and "rightActions:" not in code(view), True)
 check("each password the keystore left is asked once, then the call again",
@@ -637,6 +637,15 @@ check("a Bitcoin account can be removed", "deleteBitcoinAccount(QString group, Q
       and "keystore_module.delete_bitcoin_account(" in backend, True)
 check("an EVM file goes with its last account", "keystore_module.remove_group(params(p));"
       in block(backend, "bool EvmKeystoreUiBackend::deleteAccount(", 30), True)
+check("a whole wallet is removed by its seed, with its password",
+      "removeSeedWallet(QString seed, QString password)" in rep
+      and "keystore_module.remove_wallet(" in block(backend, "bool EvmKeystoreUiBackend::removeSeedWallet(", 16), True)
+check("offered on every wallet card, behind an intent gesture",
+      'id: "removewallet", label: "Remove wallet…"' in code(view)
+      and 'objectName: "removeSeedWalletAck"' in code(view)
+      and "removeSeedAck.checked" in block(code(view), 'objectName: "removeSeedWalletConfirm"', 4), True)
+check("an empty wallet keeps its card until removed",
+      "Tree.emptyBundles(emptyWallets)" in code(view) and '"emptyWallets"' in backend, True)
 check("an older file's derivation key is a strip, confirmed before it goes",
       'id: "forgetkey"' in treesrc and 'objectName: "forgetKeyConfirm"' in code(view), True)
 check("the file's own name is no longer offered on a wallet's file",

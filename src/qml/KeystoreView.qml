@@ -78,6 +78,7 @@ Item {
     readonly property int lockedWallets: ready ? backend.lockedWallets : 0
     // Older builds' wallets the Signer app can't open until they are added again.
     readonly property var addAgain: ready ? j(backend.addAgainJson, "[]") : []
+    readonly property var emptyWallets: ready ? j(backend.emptyWalletsJson, "[]") : []
     // What an earlier version left in the keystore folder this one doesn't read until it moves in.
     readonly property var olderKeystore: ready ? j(backend.olderKeystoreJson, "{}") : ({})
     readonly property var olderLeft: olderKeystore.left || []
@@ -173,7 +174,7 @@ Item {
     readonly property var nodes: !ready ? []
         : Tree.treeOf(accounts, provenance, groups, derivationKeys, reads, walletNames, addAgain)
 
-    readonly property var seedNodes: Tree.seedGroupsOf(nodes)
+    readonly property var seedNodes: Tree.seedGroupsOf(nodes).concat(Tree.emptyBundles(emptyWallets))
 
     function keptForSeed(bundle) {
         for (var i = 0; i < bundle.nodes.length; ++i) {
@@ -274,6 +275,7 @@ Item {
     // The header over a recovery phrase's account files: its wallet name, else its default, else
     // its position (an older keystore module gives no default).
     function seedTitleOf(bundle, index) {
+        if (bundle && bundle.empty) return bundle.empty.walletName || bundle.empty.walletDefaultName || ""
         if (!bundle || !bundle.nodes.length) return ""
         var seedId = (bundle.nodes[0].group || {}).seedId
         return root.seedNameFor(seedId) || root.seedDefaultNameFor(seedId)
@@ -462,6 +464,7 @@ Item {
     // A recovery phrase's account files are one wallet, drawn as every app draws one: its rows,
     // each account's own actions on it, and the wallet's at the top and bottom.
     function seedOf(bundle) {
+        if (bundle && bundle.empty) return String(bundle.empty.seed)
         return bundle && bundle.nodes.length ? String((bundle.nodes[0].group || {}).seedId || "") : ""
     }
     function cardAccounts(bundle) {
@@ -493,15 +496,28 @@ Item {
     // All three act on the whole wallet, so they sit together beside its name.
     function walletActions(bundle) {
         if (!bundle || !bundle.seed) return []
+        var remove = { id: "removewallet", label: "Remove wallet…", enabled: root.custodian }
+        // With no file left, its phrase adds to it again; there is nothing to rename or re-password.
+        if (bundle.empty) return [{ id: "add", label: "Add accounts…", enabled: root.custodian }, remove]
         var out = bundle.needsPhrase ? [] : [{ id: "add", label: "Add accounts…", enabled: root.custodian }]
         out.push({ id: "rename", label: "Rename…", enabled: root.custodian })
         // One added before wallets could be locked has no wallet password until its phrase comes again.
         if (bundle.linked && !bundle.needsPhrase)
             out.push({ id: "password", label: "Change password…", enabled: root.custodian })
+        out.push(remove)
         return out
     }
     function walletAction(bundle, index, id) {
-        if (id === "add") {
+        if (id === "add" && bundle.empty) {
+            accountFlow.mode = "import"
+            accountFlow.open()
+        } else if (id === "removewallet") {
+            removeSeedWalletDialog.seed = root.seedOf(bundle) || bundle.nodes[0].group.id
+            removeSeedWalletDialog.shownTitle = root.seedTitleOf(bundle, index)
+            removeSeedWalletDialog.count = bundle.empty ? 0 : root.cardAccounts(bundle).length
+            removeSeedWalletDialog.withPassword = !bundle.empty
+            removeSeedWalletDialog.open()
+        } else if (id === "add") {
             accountFlow.mode = "extend"
             accountFlow.sourceGroup = bundle.nodes[0].group.id
             accountFlow.walletSeed = bundle.linked ? root.seedOf(bundle) : ""
@@ -739,7 +755,7 @@ Item {
             LogosText {
                 objectName: "accountsEmpty"
                 anchors.centerIn: parent
-                visible: root.nodes.length === 0 && !root.treeReadRefused
+                visible: root.seedNodes.length === 0 && !root.treeReadRefused
                 text: root.lockedWallets > 0 ? "No unlocked keystore files. Unlock a wallet, or create or import accounts."
                                              : "No keystore files yet. Create or import accounts to get started."
                 color: Theme.palette.textSecondary
@@ -750,7 +766,7 @@ Item {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                visible: root.nodes.length === 0 && root.treeReadRefused
+                visible: root.seedNodes.length === 0 && root.treeReadRefused
                 text: "Part of what this screen lists could not be read, so an empty screen "
                       + "here is not the same as an empty keystore. What failed is named above."
                 color: Theme.palette.warning
@@ -760,7 +776,7 @@ Item {
                 id: treeScroll
                 objectName: "accountTree"
                 anchors.fill: parent
-                visible: root.nodes.length > 0
+                visible: root.seedNodes.length > 0
                 contentWidth: availableWidth
 
                 ColumnLayout {
@@ -898,6 +914,89 @@ Item {
             removeWalletDialog.group = walletSheet.group
             walletSheet.close()
             removeWalletDialog.open()
+        }
+    }
+
+    // ── Remove a whole wallet ──────────────────────────────────────────────────────
+    // Every account and file of it, its kept phrase and its name, then the Signer's record.
+    LogosWarningDialog {
+        id: removeSeedWalletDialog
+        objectName: "removeSeedWalletDialog"
+        title: "Remove this wallet?"
+        accentColor: Theme.palette.error
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 40, 560)
+
+        property string seed: ""
+        property string shownTitle: ""
+        property int count: 0
+        property bool withPassword: true
+        onOpened: { removeSeedAck.checked = false; removeSeedPassword.text = "" }
+        onClosed: { removeSeedAck.checked = false; removeSeedPassword.text = ""; seed = "" }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacing.small
+
+            LogosText {
+                objectName: "removeSeedWalletName"
+                Layout.fillWidth: true
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                font.pixelSize: Theme.typography.subtitleText
+                text: removeSeedWalletDialog.shownTitle
+            }
+            LogosText {
+                objectName: "removeSeedWalletLost"
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: (removeSeedWalletDialog.count > 0
+                       ? "Its " + removeSeedWalletDialog.count + (removeSeedWalletDialog.count === 1 ? " account" : " accounts")
+                         + " go from this keystore, with every file of it, its saved recovery phrase and its name. "
+                       : removeSeedWalletDialog.withPassword
+                         ? "Every file of it goes from this keystore, with its saved recovery phrase and its name. "
+                         : "It goes from this keystore, with its name. ")
+                      + "The Signer app forgets it, and what other apps keep for it can't be opened again."
+            }
+            LogosText {
+                objectName: "removeSeedWalletNotUndo"
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.palette.warning
+                text: "Only its recovery phrase brings these accounts back. Without it, they are gone for good."
+            }
+            LogosTextField {
+                id: removeSeedPassword
+                objectName: "removeSeedWalletPassword"
+                Layout.fillWidth: true
+                visible: removeSeedWalletDialog.withPassword
+                echoMode: TextInput.Password
+                placeholderText: "This wallet's password"
+            }
+            LogosText {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: Theme.palette.error
+                visible: text.length > 0
+                text: root.backend ? root.backend.lastError : ""
+            }
+            LogosCheckbox {
+                id: removeSeedAck
+                objectName: "removeSeedWalletAck"
+                text: "I want this wallet removed"
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                LogosButton { objectName: "removeSeedWalletCancel"; text: "Cancel"; onClicked: removeSeedWalletDialog.close() }
+                Item { Layout.fillWidth: true }
+                LogosButton {
+                    objectName: "removeSeedWalletConfirm"
+                    text: "Remove wallet"
+                    enabled: removeSeedAck.checked && removeSeedWalletDialog.seed !== ""
+                             && (!removeSeedWalletDialog.withPassword || removeSeedPassword.text.length > 0)
+                    onClicked: logos.watch(root.backend.removeSeedWallet(removeSeedWalletDialog.seed, removeSeedPassword.text),
+                        function (good) { if (good) removeSeedWalletDialog.close() })
+                }
+            }
         }
     }
 

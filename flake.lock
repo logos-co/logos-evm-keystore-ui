@@ -126,15 +126,16 @@
         "logos-signer-interface": "logos-signer-interface"
       },
       "locked": {
-        "lastModified": 1793890784,
-        "narHash": "sha256-yQ70WJB98QS230GWOY7KvjWCQGmJC1cDE3+4gqvf9w8=",
+        "lastModified": 1793935538,
+        "narHash": "sha256-bdBhg4Csq/0ELDqe54llFyGago0drp6lDMaHurXfgxs=",
         "owner": "logos-co",
         "repo": "logos-evm-keystore-module",
-        "rev": "e83a899a1718ed52e3173dc85d06b15b9c68f41a",
+        "rev": "c0b2d352e72940114f6a705b617bd1508ba2ea4d",
         "type": "github"
       },
       "original": {
         "owner": "logos-co",
+        "ref": "feat/remove-wallet",
         "repo": "logos-evm-keystore-module",
         "type": "github"
       }
@@ -5880,17 +5881,17 @@
     "logos-signer-interface": {
       "flake": false,
       "locked": {
-        "lastModified": 1793876970,
-        "narHash": "sha256-Z4uNSVJamahwU10rtpk3UfxriwEt/obcLb3iW+Wxeyg=",
+        "lastModified": 1793934464,
+        "narHash": "sha256-bJFSwcEJTrdSizNTl+ZjlnwWV51eLEXP4GNtzLs7xbE=",
         "owner": "logos-co",
         "repo": "logos-signer-interface",
-        "rev": "e822d0f6820eb95a18de5a540b47948c1eb7fc40",
+        "rev": "827e72c6a3d8500635d171842c56ecb650d12b76",
         "type": "github"
       },
       "original": {
         "owner": "logos-co",
         "repo": "logos-signer-interface",
-        "rev": "e822d0f6820eb95a18de5a540b47948c1eb7fc40",
+        "rev": "827e72c6a3d8500635d171842c56ecb650d12b76",
         "type": "github"
       }
     },

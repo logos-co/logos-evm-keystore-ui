@@ -378,6 +378,15 @@ check("a wallet that needs its phrase again says so first, with the way back",
 check("lines: how it unlocks, or that it isn't linked yet",
   [T.cardLines(bundle), T.cardLines({ linked: false }).length, T.cardLines({ linked: true, needsPhrase: true })],
   [["Unlocks with its keystore password."], 1, []]);
+const emptyCards = T.emptyBundles([{ seed: S1, walletName: "Old", fingerprint: "73c5da0a" }, { seed: "" }, null,
+                                    { seed: "k_2", fingerprint: "NOT-HEX!" }]);
+check("a wallet with no file left is a card of its own, linked, with no rows",
+  emptyCards.map(b => [b.id, b.seed, b.linked, b.needsPhrase, b.nodes.length]), [[S1, true, true, false, 0], ["k_2", true, true, false, 0]]);
+check("its Wallet ID is the one the keystore kept, if it is one",
+  emptyCards.map(b => T.cardFingerprint(b)), ["73c5da0a", ""]);
+check("it says its phrase adds its accounts again, not how it unlocks",
+  T.cardLines(emptyCards[0]), ["Its accounts are gone. Its recovery phrase adds them again."]);
+check("and it claims no strip", T.cardStrips(emptyCards[0], false, [], [], true), []);
 check("what a password change left, each file once, in words",
   T.leftFiles([{ kind: "wallet", id: BTC }, { kind: "unlock", id: BTC }, { kind: "phrase", id: "p_1" },
                { kind: "account", id: "v1", address: A1 }], cardGroups),
