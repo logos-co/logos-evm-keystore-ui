@@ -4,7 +4,7 @@
   inputs = {
     logos-module-builder.url = "github:logos-co/logos-module-builder";
     keystore_module = {
-      url = "github:logos-co/logos-evm-keystore-module?ref=feat/remove-wallet";
+      url = "github:logos-co/logos-evm-keystore-module";
       inputs.logos-module-builder.follows = "logos-module-builder";
     };
     # The keys app is the manager's custodian: it decides open and unlock requests.
