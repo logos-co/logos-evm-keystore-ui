@@ -619,6 +619,9 @@ check("and the per-account Manage sheet is gone", "manageSheet" in code(view), F
 check("Change password… is the wallet's, not an account's",
       'id: "password", label: "Change password…"' in code(view)
       and "changeWalletPassword(QString seed, QString passwordsJson, QString newPassword)" in rep, True)
+check("Add accounts…, Rename… and Change password… sit together beside the wallet's name",
+      "actions: root.walletActions(seedBranch.bundle)" in code(view)
+      and "leftActions:" not in code(view) and "rightActions:" not in code(view), True)
 check("each password the keystore left is asked once, then the call again",
       "sheet.tried.concat(" in code(text("WalletPasswordSheet.qml")), True)
 check("Add accounts takes the wallet's password, checked before anything is written",

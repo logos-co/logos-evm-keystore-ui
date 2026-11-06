@@ -50,9 +50,9 @@ an older derivation key (**Add account…**, **Stop keeping…**), an empty Ethe
 - **Each row:** **Rename…**, **Remove…**, and **Export…** (Ethereum) or **Descriptor…** (Bitcoin).
   Removing a Bitcoin account uses `delete_bitcoin_account`; an Ethereum file left with no account
   is removed with it.
-- **The wallet:** **Add accounts**, **Rename…** and **Change password…**. One password opens every
-  file of a wallet: `change_wallet_password` moves each file the given password opens, and names
-  what is still under another one, so each of those is asked for once.
+- **The wallet, beside its name:** **Add accounts…**, **Rename…** and **Change password…**. One
+  password opens every file of a wallet: `change_wallet_password` moves each file the given password
+  opens, and names what is still under another one, so each of those is asked for once.
 - **Renaming** asks for no password while the Signer app has the wallet unlocked. The sheets try
   without one first and ask only when the keystore refuses.
 - **An unnamed wallet** goes by the keystore's default name (`walletDefaultName`, usually
