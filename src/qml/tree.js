@@ -385,8 +385,19 @@ function cardEntries(bundle, provenance, labels, groups, walletNames, seedName) 
     return out
 }
 
+// A phrase wallet with no file left: a card of its own until it is removed.
+function emptyBundles(wallets) {
+    return (wallets || []).filter(function (w) { return w && w.seed }).map(function (w) {
+        return { id: String(w.seed), seed: true, linked: true, needsPhrase: false, nodes: [], empty: w }
+    })
+}
+
 // The Wallet ID: the seed's master fingerprint, as any of its files records it.
 function cardFingerprint(bundle) {
+    if (bundle && bundle.empty) {
+        var e = String(bundle.empty.fingerprint || "")
+        return /^[0-9a-f]{8}$/.test(e) ? e : ""
+    }
     var nodes = (bundle && bundle.nodes) || []
     for (var i = 0; i < nodes.length; ++i) {
         var f = nodes[i].group ? String(nodes[i].group.fingerprint || "") : ""
@@ -397,6 +408,7 @@ function cardFingerprint(bundle) {
 
 function cardLines(bundle) {
     if (!bundle || bundle.needsPhrase) return []
+    if (bundle.empty) return ["Its accounts are gone. Its recovery phrase adds them again."]
     return bundle.linked ? ["Unlocks with its keystore password."]
                          : ["Not linked to a recovery phrase yet: add a wallet with its phrase to check it and group its files."]
 }

@@ -51,6 +51,7 @@ public:
                              int count) override;
     bool forgetDerivation(QString group) override;
     bool removeWallet(QString group) override;
+    bool removeSeedWallet(QString seed, QString password) override;
 
     QString exportVaultJson(QString address, QString password) override;
 

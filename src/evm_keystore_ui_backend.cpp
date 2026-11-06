@@ -376,6 +376,8 @@ void EvmKeystoreUiBackend::loadGroups()
     // An older keystore names none: an array either way.
     setAddAgainJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("addAgain")).toArray())
                                : QStringLiteral("[]"));
+    setEmptyWalletsJson(groupsRead ? compact(parseObject(groups).value(QStringLiteral("emptyWallets")).toArray())
+                                   : QStringLiteral("[]"));
 
     const QString provenance = modules().keystore_module.get_provenance();
     setProvenanceJson(read(QStringLiteral("provenance"), provenance, QStringLiteral("provenance"))
@@ -727,6 +729,22 @@ bool EvmKeystoreUiBackend::removeWallet(QString group)
         return true;
     }
     const bool good = ok(reply, QStringLiteral("remove wallet"));
+    if (good)
+        refresh();
+    return good;
+}
+
+bool EvmKeystoreUiBackend::removeSeedWallet(QString seed, QString password)
+{
+    setLastError(QString());
+    QJsonObject p;
+    p[QStringLiteral("seed")] = seed;
+    p[QStringLiteral("password")] = password;
+    password.fill(QChar(0));
+    QString body = params(p);
+    p = {};
+    const bool good = ok(modules().keystore_module.remove_wallet(body), QStringLiteral("remove wallet"));
+    body.fill(QChar(0));
     if (good)
         refresh();
     return good;
