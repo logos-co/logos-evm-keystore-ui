@@ -392,6 +392,19 @@ function emptyBundles(wallets) {
     })
 }
 
+// The kept phrase a card shows: one its files were made from, or the one an empty wallet's record
+// still names. Only a live vault counts, not a copy an interrupted write left.
+function keptPhraseOf(bundle, phrases) {
+    if (!bundle) return ""
+    var ids = bundle.empty ? (bundle.empty.phrases || [])
+                           : (bundle.nodes || []).map(function (n) { return n.group ? n.group.phrase : "" })
+    for (var i = 0; i < ids.length; ++i) {
+        var id = ids[i]
+        if (id && (phrases || []).some(function (p) { return p.id === id && !p.staged })) return id
+    }
+    return ""
+}
+
 // The Wallet ID: the seed's master fingerprint, as any of its files records it.
 function cardFingerprint(bundle) {
     if (bundle && bundle.empty) {
