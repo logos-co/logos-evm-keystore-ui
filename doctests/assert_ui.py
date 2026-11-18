@@ -646,6 +646,10 @@ check("offered on every wallet card, behind an intent gesture",
       and "removeSeedAck.checked" in block(code(view), 'objectName: "removeSeedWalletConfirm"', 4), True)
 check("an empty wallet keeps its card until removed",
       "Tree.emptyBundles(emptyWallets)" in code(view) and '"emptyWallets"' in backend, True)
+check("its kept phrase adds its accounts again without the words",
+      'accountFlow.mode = accountFlow.keptId ? "extend" : "import"' in block(code(view), 'if (id === "add" && bundle.empty) {', 5), True)
+check("removing it names the saved phrase only when there is one, and counts in words",
+      'readonly property string withWhat: kept ?' in code(view) and '" account goes" : " accounts go"' in code(view), True)
 check("an older file's derivation key is a strip, confirmed before it goes",
       'id: "forgetkey"' in treesrc and 'objectName: "forgetKeyConfirm"' in code(view), True)
 check("the file's own name is no longer offered on a wallet's file",

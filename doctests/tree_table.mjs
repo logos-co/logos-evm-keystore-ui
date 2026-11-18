@@ -387,6 +387,16 @@ check("its Wallet ID is the one the keystore kept, if it is one",
 check("it says its phrase adds its accounts again, not how it unlocks",
   T.cardLines(emptyCards[0]), ["Its accounts are gone. Its recovery phrase adds them again."]);
 check("and it claims no strip", T.cardStrips(emptyCards[0], false, [], [], true), []);
+const keptCard = T.emptyBundles([{ seed: S1, phrases: ["p_1"] }])[0];
+check("an empty wallet's kept phrase is still its own, so its card shows it",
+  [T.keptPhraseOf(keptCard, [{ id: "p_1", groups: [] }]), T.cardStrips(keptCard, true, [], [], true).map(x => x.id)],
+  ["p_1", ["kept"]]);
+check("...but not a copy an interrupted write left, nor a phrase its record doesn't name",
+  [T.keptPhraseOf(keptCard, [{ id: "p_1", staged: true }]), T.keptPhraseOf(keptCard, [{ id: "p_2" }]),
+   T.keptPhraseOf(emptyCards[0], [{ id: "p_1" }])],
+  ["", "", ""]);
+check("a card with files shows the phrase they were made from",
+  T.keptPhraseOf({ nodes: [{ group: { phrase: "" } }, { group: { phrase: "p_1" } }] }, [{ id: "p_1" }]), "p_1");
 check("what a password change left, each file once, in words",
   T.leftFiles([{ kind: "wallet", id: BTC }, { kind: "unlock", id: BTC }, { kind: "phrase", id: "p_1" },
                { kind: "account", id: "v1", address: A1 }], cardGroups),

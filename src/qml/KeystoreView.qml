@@ -176,13 +176,7 @@ Item {
 
     readonly property var seedNodes: Tree.seedGroupsOf(nodes).concat(Tree.emptyBundles(emptyWallets))
 
-    function keptForSeed(bundle) {
-        for (var i = 0; i < bundle.nodes.length; ++i) {
-            var id = bundle.nodes[i].group.phrase
-            if (id && root.phrases.some(function(p) { return p.id === id && !p.staged })) return id
-        }
-        return ""
-    }
+    function keptForSeed(bundle) { return Tree.keptPhraseOf(bundle, root.phrases) }
 
     function isKeyFrame(n) { return n.kind === "stranded" || n.kind === "unreadKey" }
 
@@ -509,12 +503,15 @@ Item {
     }
     function walletAction(bundle, index, id) {
         if (id === "add" && bundle.empty) {
-            accountFlow.mode = "import"
+            // Its kept phrase adds them with that phrase's password; without one, the words are typed.
+            accountFlow.keptId = root.keptForSeed(bundle)
+            accountFlow.mode = accountFlow.keptId ? "extend" : "import"
             accountFlow.open()
         } else if (id === "removewallet") {
             removeSeedWalletDialog.seed = root.seedOf(bundle) || bundle.nodes[0].group.id
             removeSeedWalletDialog.shownTitle = root.seedTitleOf(bundle, index)
             removeSeedWalletDialog.count = bundle.empty ? 0 : root.cardAccounts(bundle).length
+            removeSeedWalletDialog.kept = root.keptForSeed(bundle) !== ""
             removeSeedWalletDialog.withPassword = !bundle.empty
             removeSeedWalletDialog.open()
         } else if (id === "add") {
@@ -930,7 +927,9 @@ Item {
         property string seed: ""
         property string shownTitle: ""
         property int count: 0
+        property bool kept: false
         property bool withPassword: true
+        readonly property string withWhat: kept ? "its saved recovery phrase and its name" : "its name"
         onOpened: { removeSeedAck.checked = false; removeSeedPassword.text = "" }
         onClosed: { removeSeedAck.checked = false; removeSeedPassword.text = ""; seed = "" }
 
@@ -950,11 +949,12 @@ Item {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 text: (removeSeedWalletDialog.count > 0
-                       ? "Its " + removeSeedWalletDialog.count + (removeSeedWalletDialog.count === 1 ? " account" : " accounts")
-                         + " go from this keystore, with every file of it, its saved recovery phrase and its name. "
+                       ? "Its " + removeSeedWalletDialog.count + (removeSeedWalletDialog.count === 1 ? " account goes" : " accounts go")
+                         + " from this keystore, with every file of it" + (removeSeedWalletDialog.kept ? ", " : " and ")
+                         + removeSeedWalletDialog.withWhat + ". "
                        : removeSeedWalletDialog.withPassword
-                         ? "Every file of it goes from this keystore, with its saved recovery phrase and its name. "
-                         : "It goes from this keystore, with its name. ")
+                         ? "Every file of it goes from this keystore, with " + removeSeedWalletDialog.withWhat + ". "
+                         : "It goes from this keystore, with " + removeSeedWalletDialog.withWhat + ". ")
                       + "The Signer app forgets it, and what other apps keep for it can't be opened again."
             }
             LogosText {
