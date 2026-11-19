@@ -5,9 +5,8 @@ import Logos.Controls
 import Logos.Theme
 
 // An app asks the signer manager to open a Bitcoin wallet for it, and the person decides here.
-// Signing without a password isn't offered for now: such a request can only be refused, and an
-// open that asks for it too opens without it. The lines are the manager's own, shown verbatim;
-// the requester's reason among them is marked as its claim. The title is fixed: LogosDialog
+// The lines are the manager's own, shown verbatim; the requester's reason among them is marked
+// as its claim. The title is fixed: LogosDialog
 // renders `title` as AutoText, and a module name is not ours to render that way.
 LogosDialog {
     id: sheet
@@ -119,16 +118,6 @@ LogosDialog {
             color: Theme.palette.warning
             text: (sheet.shown.requester || "The app") + " will see every address and transaction of "
                   + "this wallet, and can ask you to sign. It can't sign by itself."
-        }
-        LogosText {
-            objectName: "accessNoPasswordless"
-            visible: !sheet.isOpen || (!!sheet.asked.unlock && !sheet.onDevice)
-            Layout.fillWidth: true
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.textSecondary
-            text: sheet.isOpen ? "It also asks to sign without the password. That isn't offered for now: only the wallet opens."
-                               : "Signing without the password isn't offered for now, so this can only be rejected."
         }
         LogosText {
             objectName: "accessDeviceNote"
