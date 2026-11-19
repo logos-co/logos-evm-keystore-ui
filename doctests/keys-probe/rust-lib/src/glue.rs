@@ -2,12 +2,10 @@
 //!
 //!   1. name the keystore's and the manager's roles (ungated)
 //!   2. request_open for any native segwit wallet on regtest, and wait: the person adds one
-//!   3. request_unlock for that wallet, two signatures, each confirmed: the keys app offers
-//!      only Reject for it now, so the person refuses and this goes on
-//!   4. request_open for the mock device's wallet, and wait
-//!   5. when keys_probe_ui asks, request_open for a regtest taproot wallet: the person creates one
+//!   3. request_open for the mock device's wallet, and wait
+//!   4. when keys_probe_ui asks, request_open for a regtest taproot wallet: the person creates one
 //!
-//! The person decides 2 to 5 in the keys app, which keys_probe_ui sends them to; this module
+//! The person decides 2 to 4 in the keys app, which keys_probe_ui sends them to; this module
 //! only asks, and prints what it was handed with its receipt. It runs on its own thread, so the
 //! first outbound call cannot re-enter the host while this module is still initialising.
 
@@ -90,26 +88,18 @@ fn drive(state: Shared) {
 
     // No wallet exists yet: the person adds one from the request itself.
     let open = json!({ "family": "bitcoin", "network": "regtest", "reason": "Doc-test: open a regtest wallet" });
-    let group = match ask_and_wait(&state, "OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
+    match ask_and_wait(&state, "OPEN", modules().signer_manager_module.request_open(&open.to_string()).map_err(|e| format!("{e:?}"))) {
         Ok(v) => {
             let key_len = text(&v, "databaseKey").len();
             println!("{MARK}_WALLET: {}", text(&v, "group"));
             println!("{MARK}_OPENED: {} databaseKey={key_len} hex chars", text(&v, "external"));
             set!(json!({ "ok": true, "state": "opened", "group": text(&v, "group") }));
-            text(&v, "group")
         }
         Err(e) => {
             println!("{MARK}_ERROR: open: {e}");
             set!(json!({ "ok": false, "state": "open_failed", "error": e }));
             return;
         }
-    };
-
-    let unlock = json!({ "account": group, "count": 2, "confirm": true, "apps": ["keys_probe"],
-                         "reason": "Doc-test: two signatures" });
-    match ask_and_wait(&state, "UNLOCK", modules().signer_manager_module.request_unlock(&unlock.to_string()).map_err(|e| format!("{e:?}"))) {
-        Ok(v) => println!("{MARK}_UNLOCKED: {}", v.get("terms").cloned().unwrap_or(Value::Null)),
-        Err(e) => println!("{MARK}_UNLOCK_REFUSED: {e}"),
     }
 
     // A wallet whose key is on the mock device: its first open sets the password of its data.

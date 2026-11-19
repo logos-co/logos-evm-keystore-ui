@@ -76,9 +76,8 @@ or dialog-local state, never replica properties; closing the wizard clears them.
 
 This package continues servicing the signer manager's open requests through
 `keystore.accounts.open`. Its request dialog remains available to wallet apps; the home screen
-no longer acts as the manager's inventory dashboard. Signing without the password is set aside
-for now: `keystore.accounts.unlock` and the sheet behind it are gone, an app's request for it can
-only be rejected, and an open that asks for it too opens without it.
+no longer acts as the manager's inventory dashboard. Letting an app sign without the password is
+an allowance, granted in the Signer app.
 **Add a wallet…** inside an open request uses this same account wizard, with the requested
 Bitcoin address type and network fixed. It offers a new phrase, an existing phrase, or a saved
 encrypted recovery source. Saving selects the first new account back in the pending request;
