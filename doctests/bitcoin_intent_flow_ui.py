@@ -38,6 +38,7 @@ assert value('groups.length') == 0, 'Use an empty isolated profile'
 request('bitcoin_taproot', 'bitcoin', 0)
 click('flowCreatePhrase')
 wait('!working && generated.length > 0', FLOW)
+click('flowRevealPhrase')
 setp('flowWordCount', 'currentIndex', 1)
 evaluate('activated(1)', 'flowWordCount')
 wait('!working && generated.split(" ").length === 18', FLOW)
@@ -66,7 +67,7 @@ for i, (family, network) in enumerate([('bitcoin', 'bitcoin'), ('bitcoin', 'regt
     for name in ['flowCoin', 'flowTestnet', 'flowScript']:
         assert not value('enabled', name), name
     click('flowSelect_0')
-    click('flowReview')
+    click('flowReview'); click('flowToPassword')
     setp('flowPassword', 'text', PASSWORD)
     if i == 0:
         setp('flowRepeatPassword', 'text', PASSWORD)

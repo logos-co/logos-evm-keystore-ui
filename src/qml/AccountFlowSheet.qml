@@ -363,12 +363,14 @@ LogosDialog {
                 ColumnLayout {
                     visible: sheet.step === 1; Layout.fillWidth: true
                     // Account type as radio buttons (design-system controls), as in the Keycard app.
-                    Item { id: coin; objectName: "flowCoin"; visible: false; property int currentIndex: 0 }
+                    // The choice itself, kept as a value with ComboBox's `currentIndex` / `activated` so callers and
+                    // the doc-tests drive it the same way.
+                    Item { id: coin; objectName: "flowCoin"; visible: false; enabled: !sheet.working && !sheet.requested; property int currentIndex: 0; signal activated(int index); onActivated: sheet.refreshPage() }
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: Theme.spacing.large
-                        LogosRadioButton { objectName: "flowCoinEthereum"; text: "Ethereum"; checkable: false; checked: coin.currentIndex === 0; enabled: !sheet.working && !sheet.requested; onClicked: { coin.currentIndex = 0; sheet.refreshPage() } }
-                        LogosRadioButton { objectName: "flowCoinBitcoin"; text: "Bitcoin"; checkable: false; checked: coin.currentIndex === 1; enabled: !sheet.working && !sheet.requested; onClicked: { coin.currentIndex = 1; sheet.refreshPage() } }
+                        LogosRadioButton { objectName: "flowCoinEthereum"; text: "Ethereum"; checkable: false; checked: coin.currentIndex === 0; enabled: !sheet.working && !sheet.requested; onClicked: { coin.currentIndex = 0; coin.activated(0) } }
+                        LogosRadioButton { objectName: "flowCoinBitcoin"; text: "Bitcoin"; checkable: false; checked: coin.currentIndex === 1; enabled: !sheet.working && !sheet.requested; onClicked: { coin.currentIndex = 1; coin.activated(1) } }
                         LogosCheckbox { id: testnet; objectName: "flowTestnet"; visible: coin.currentIndex === 1; enabled: !sheet.working && !sheet.requested; text: "Test networks"; onToggled: sheet.refreshPage() }
                     }
                     RowLayout {
@@ -383,9 +385,9 @@ LogosDialog {
                             Layout.fillWidth: true; text: "0"; enabled: !sheet.working
                             validator: RegularExpressionValidator { regularExpression: /[0-9]{1,10}/ }
                         }
-                        Item { id: scriptType; objectName: "flowScript"; visible: false; property int currentIndex: 0 }
-                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Native SegWit"; checkable: false; checked: scriptType.currentIndex === 0; enabled: !sheet.working && !sheet.requested; onClicked: { scriptType.currentIndex = 0; sheet.refreshPage() } }
-                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Taproot"; checkable: false; checked: scriptType.currentIndex === 1; enabled: !sheet.working && !sheet.requested; onClicked: { scriptType.currentIndex = 1; sheet.refreshPage() } }
+                        Item { id: scriptType; objectName: "flowScript"; visible: false; enabled: !sheet.working && !sheet.requested; property int currentIndex: 0; signal activated(int index); onActivated: sheet.refreshPage() }
+                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Native SegWit"; checkable: false; checked: scriptType.currentIndex === 0; enabled: !sheet.working && !sheet.requested; onClicked: { scriptType.currentIndex = 0; scriptType.activated(0) } }
+                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Taproot"; checkable: false; checked: scriptType.currentIndex === 1; enabled: !sheet.working && !sheet.requested; onClicked: { scriptType.currentIndex = 1; scriptType.activated(1) } }
                         LogosButton { text: "Preview"; enabled: !sheet.working; onClicked: sheet.refreshPage() }
                     }
                     LogosText {
@@ -418,8 +420,10 @@ LogosDialog {
                                 spacing: Theme.spacing.small
                                 LogosCheckbox {
                                     objectName: "flowSelect_" + index
-                                    enabled: false; opacity: 1.0
+                                    enabled: parent.parent.canToggle
+                                    checkable: false
                                     checked: sheet.chosen(sheet.rowKey(modelData)) || modelData.present
+                                    onClicked: sheet.toggle(modelData, !sheet.chosen(sheet.rowKey(modelData)))
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 2

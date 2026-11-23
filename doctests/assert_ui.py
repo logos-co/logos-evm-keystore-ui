@@ -614,7 +614,7 @@ check("its rows, strips and ID are decided in tree.js",
       all(f in code(view) for f in ("Tree.cardEntries(", "Tree.cardStrips(", "Tree.cardFingerprint(")), True)
 check("Rename… and Remove… on every row, Export… or Descriptor… beside them",
       all(f in code(view) for f in ('id: "rename", label: "Rename…"', 'id: "remove", label: "Remove…"',
-                                    'id: "export", label: "Export…"', 'id: "descriptor", label: "Descriptor…"')), True)
+                                    'id: "export", label: "Export keystore file…"', 'id: "descriptor", label: "Descriptor…"')), True)
 check("and the per-account Manage sheet is gone", "manageSheet" in code(view), False)
 check("Change password… is the wallet's, not an account's",
       'id: "password", label: "Change password…"' in code(view)
