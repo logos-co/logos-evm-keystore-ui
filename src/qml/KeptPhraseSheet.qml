@@ -38,7 +38,7 @@ LogosDialog {
             objectName: "phraseShowRisk"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: Theme.palette.warning
+            color: Theme.palette.textSecondary
             text: "Anyone who sees it owns every account it makes. Check that no camera or person can see your screen."
         }
         LogosTextField {
@@ -50,13 +50,29 @@ LogosDialog {
             placeholderText: "The kept phrase's password"
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
-        LogosText {
+        // The words as a numbered table, the same one Create shows them in.
+        GridLayout {
             objectName: "phraseWords"
             visible: sheet.words.length > 0
             Layout.fillWidth: true
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            text: sheet.words
+            columns: width < 380 ? 1 : 2
+            columnSpacing: Theme.spacing.small
+            rowSpacing: Theme.spacing.small
+            Repeater {
+                model: sheet.words ? sheet.words.split(" ") : []
+                delegate: Frame {
+                    required property string modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    padding: 6
+                    background: Rectangle { radius: 6; color: Theme.palette.backgroundMuted }
+                    contentItem: RowLayout {
+                        spacing: Theme.spacing.small
+                        LogosText { text: (index + 1) + "."; Layout.preferredWidth: 26; color: Theme.palette.textSecondary }
+                        LogosText { Layout.fillWidth: true; text: modelData; textFormat: Text.PlainText }
+                    }
+                }
+            }
         }
 
         RowLayout {

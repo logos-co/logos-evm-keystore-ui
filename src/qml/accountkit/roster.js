@@ -217,9 +217,11 @@ function sortAccounts(entries) {
 
 // An action as an app passes it: a label, or { id, label, enabled, tip }.
 function action(a) {
-    if (typeof a === "string") return { id: a, label: a, enabled: true, tip: "" }
+    if (typeof a === "string") return { id: a, label: a, enabled: true, tip: "", icon: "", primary: false }
     var label = text(a && a.label)
-    return { id: text(a && a.id) || label, label: label, enabled: !a || a.enabled !== false, tip: text(a && a.tip) }
+    // `icon`: a secondary action drawn as an icon, its label the tooltip. `primary`: the card's main action.
+    return { id: text(a && a.id) || label, label: label, enabled: !a || a.enabled !== false, tip: text(a && a.tip),
+             icon: text(a && a.icon), primary: !!(a && a.primary) }
 }
 
 // A list of them, or a function of the entry that returns one.

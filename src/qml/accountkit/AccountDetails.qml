@@ -13,10 +13,16 @@ Item {
     property string namePrefix: ""
     // Labels, or { id, label, enabled, tip }; or a function of the entry that returns them.
     property var actions: []
+    // Icons for the inline edit (rename) by the name and the trash (remove) at the far right.
+    property url editIcon: ""
+    property url trashIcon: ""
     signal action(string id, var entry)
     signal copied(string value)
 
     readonly property var shown: Roster.actions(actions, entry)
+    readonly property var editAction: shown.filter(function (a) { return a.id === "rename" })[0] || null
+    readonly property var removeAction: shown.filter(function (a) { return a.id === "remove" })[0] || null
+    readonly property var otherActs: shown.filter(function (a) { return ["rename", "remove"].indexOf(a.id) < 0 })
     readonly property string address: Roster.rowAddress(entry)
     implicitHeight: layout.implicitHeight
     implicitWidth: 480
@@ -48,11 +54,23 @@ Item {
                     font.bold: true
                     elide: Text.ElideRight
                 }
+                LogosIconButton {
+                    objectName: row.namePrefix + "Edit"
+                    visible: !!row.editAction
+                    enabled: !row.editAction || row.editAction.enabled !== false
+                    flat: true; size: 24; iconSize: 13
+                    iconSource: row.editIcon
+                    iconColor: hovered ? Theme.palette.text : Theme.palette.textTertiary
+                    onClicked: if (row.editAction) row.action(row.editAction.id, row.entry)
+                    LogosToolTip { text: "Edit name"; visible: parent.hovered; delay: 400 }
+                }
                 RowLayout {
                     spacing: 8
                     LogosText {
                         objectName: row.namePrefix + "Id"
-                        visible: text.length > 0
+                        // Not for an Ethereum account: the derivation path below already carries its
+                        // index, as in the Keycard app. A Bitcoin account keeps its number.
+                        visible: text.length > 0 && !(row.entry && row.entry.family === "evm")
                         text: Roster.rowId(row.entry)
                         textFormat: Text.PlainText
                         color: Theme.palette.textSecondary
@@ -113,28 +131,57 @@ Item {
                     visible: row.address.length > 0
                     value: row.address
                     Accessible.name: "Copy address"
-                    ToolTip.text: "Copy address"
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 400
                     onCopied: function (v) { row.copied(v) }
+                    LogosToolTip { text: "Copy address"; visible: parent.hovered; delay: 400 }
                 }
                 Item { Layout.fillWidth: true }
             }
         }
 
         Repeater {
-            model: row.shown
-            delegate: LogosButton {
-                required property var modelData
-                objectName: row.namePrefix + "Action_" + Roster.actionName(modelData)
-                text: modelData.label
-                enabled: modelData.enabled
-                // Compact where the app's design system has it; older pins lack the property.
-                Component.onCompleted: if ("compact" in this) this["compact"] = true
-                ToolTip.text: modelData.tip
-                ToolTip.visible: hovered && modelData.tip.length > 0
-                ToolTip.delay: 400
-                onClicked: row.action(modelData.id, row.entry)
+            model: row.otherActs
+            delegate: Item {
+                    id: oa
+                    required property var modelData
+                    objectName: row.namePrefix + "Action_" + Roster.actionName(modelData)
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: modelData.icon ? 28 : oaText.implicitWidth
+                    implicitHeight: modelData.icon ? 28 : oaText.implicitHeight
+                    // An action with an icon is an icon button, its label the tooltip.
+                    LogosIconButton {
+                        visible: oa.modelData.icon.length > 0
+                        anchors.fill: parent
+                        flat: true; size: 28; iconSize: 16
+                        enabled: oa.modelData.enabled
+                        iconSource: oa.modelData.icon ? Qt.resolvedUrl(oa.modelData.icon) : ""
+                        iconColor: hovered ? Theme.palette.text : Theme.palette.textTertiary
+                        Accessible.name: oa.modelData.label.replace("…", "")
+                        onClicked: row.action(oa.modelData.id, row.entry)
+                        LogosToolTip { text: oa.modelData.tip || oa.modelData.label.replace("…", ""); visible: parent.hovered; delay: 400 }
+                    }
+                    LogosButton {
+                        id: oaText
+                        visible: oa.modelData.icon.length === 0
+                        anchors.fill: parent
+                        text: oa.modelData.label
+                        enabled: oa.modelData.enabled
+                        Component.onCompleted: if ("compact" in this) this["compact"] = true
+                        onClicked: row.action(oa.modelData.id, row.entry)
+                    }
+                }
+        }
+        LogosIconButton {
+            objectName: row.namePrefix + "Remove"
+            visible: !!row.removeAction
+            enabled: !row.removeAction || row.removeAction.enabled !== false
+            Layout.alignment: Qt.AlignVCenter
+            flat: true; size: 28; iconSize: 16
+            iconSource: row.trashIcon
+            iconColor: hovered ? Theme.palette.text : Theme.palette.textTertiary
+            onClicked: if (row.removeAction) row.action(row.removeAction.id, row.entry)
+            LogosToolTip {
+                text: (row.removeAction && row.removeAction.tip) ? row.removeAction.tip : "Remove"
+                visible: parent.hovered; delay: 400
             }
         }
     }

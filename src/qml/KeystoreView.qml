@@ -475,29 +475,34 @@ Item {
             return c
         })
     }
+    readonly property string iconEdit: Qt.resolvedUrl("assets/edit.svg")
+    readonly property string iconTrash: Qt.resolvedUrl("assets/delete.svg")
+    // Change password: the password icon from Status (StatusQ, MPL-2.0).
+    readonly property string iconLock: Qt.resolvedUrl("assets/password.svg")
     function rowActions(entry) {
         var on = root.custodian
-        return [{ id: "rename", label: "Rename…", enabled: on }, { id: "remove", label: "Remove…", enabled: on },
-                entry.family === "evm" ? { id: "export", label: "Export…", enabled: on }
-                                       : { id: "descriptor", label: "Descriptor…" }]
+        return [entry.family === "evm" ? { id: "export", label: "Export keystore file…", icon: LogosIcons.install, enabled: on }
+                                       : { id: "descriptor", label: "Descriptor…" },
+                { id: "rename", label: "Rename…", icon: root.iconEdit, enabled: on }, { id: "remove", label: "Remove…", icon: root.iconTrash, enabled: on }]
     }
     // An account no wallet holds keeps a password of its own.
     readonly property var looseActions: [
-        { id: "rename", label: "Rename…", enabled: root.custodian },
-        { id: "remove", label: "Remove…", enabled: root.custodian },
-        { id: "export", label: "Export…", enabled: root.custodian },
-        { id: "password", label: "Password…", enabled: root.custodian }]
+        { id: "export", label: "Export keystore file…", icon: LogosIcons.install, enabled: root.custodian },
+        { id: "password", label: "Change password…", icon: root.iconLock, enabled: root.custodian },
+        { id: "rename", label: "Rename…", icon: root.iconEdit, enabled: root.custodian },
+        { id: "remove", label: "Remove…", icon: root.iconTrash, enabled: root.custodian }]
     // All three act on the whole wallet, so they sit together beside its name.
+    // Icons beside the name (rename, password, remove); Add accounts is the card's primary button.
     function walletActions(bundle) {
         if (!bundle || !bundle.seed) return []
-        var remove = { id: "removewallet", label: "Remove wallet…", enabled: root.custodian }
+        var remove = { id: "removewallet", label: "Remove wallet…", icon: root.iconTrash, enabled: root.custodian }
         // With no file left, its phrase adds to it again; there is nothing to rename or re-password.
-        if (bundle.empty) return [{ id: "add", label: "Add accounts…", enabled: root.custodian }, remove]
-        var out = bundle.needsPhrase ? [] : [{ id: "add", label: "Add accounts…", enabled: root.custodian }]
-        out.push({ id: "rename", label: "Rename…", enabled: root.custodian })
+        if (bundle.empty) return [{ id: "add", label: "Add accounts", enabled: root.custodian }, remove]
+        var out = bundle.needsPhrase ? [] : [{ id: "add", label: "Add accounts", enabled: root.custodian }]
+        out.push({ id: "rename", label: "Rename…", icon: root.iconEdit, enabled: root.custodian })
         // One added before wallets could be locked has no wallet password until its phrase comes again.
         if (bundle.linked && !bundle.needsPhrase)
-            out.push({ id: "password", label: "Change password…", enabled: root.custodian })
+            out.push({ id: "password", label: "Change password…", icon: root.iconLock, enabled: root.custodian })
         out.push(remove)
         return out
     }
@@ -561,22 +566,48 @@ Item {
     readonly property var loosePhrases: root.phrases.filter(function (p) { return root.cardPhraseIds.indexOf(p.id) < 0 })
 
 
-    ColumnLayout {
-        anchors.fill: parent
+    RowLayout {
+        id: pageHeader
+        // The title row spans the window; the content below is the 560 column.
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.margins: Theme.spacing.medium
-        spacing: Theme.spacing.small
-
-        RowLayout {
-            Layout.fillWidth: true
-            LogosText { text: "Keystore files"; font.pixelSize: 22 }
-            LogosInfoButton { objectName: "keystoreFilesInfo"; title: "Account files and recovery groups"; Accessible.name: "Help: Account files and recovery groups"; text: "Each saved account has an encrypted file. Ethereum accounts use standard keystore JSON files; Bitcoin accounts use Bitcoin account files. Accounts derived from one recovery phrase are grouped together. An optional, separate encrypted recovery source lets you add more accounts later. Hardware accounts are managed in their device app." }
-            Item { Layout.fillWidth: true }
-            LogosBadge {
-                objectName: "custodianBadge"
-                text: root.custodian ? "CUSTODIAN" : "READ ONLY"
-                color: root.custodian ? Theme.palette.success : Theme.palette.warning
+        // Title, (i) and a one-line subtitle, as in the Keycard and Signer apps.
+        ColumnLayout {
+            spacing: 0
+            RowLayout {
+                spacing: Theme.spacing.tiny
+                LogosText {
+                    text: "Keystore"
+                    color: Theme.palette.text
+                    font.pixelSize: 28
+                    font.weight: Theme.typography.weightBold
+                }
+                LogosInfoButton { objectName: "keystoreFilesInfo"; title: "Account files and recovery groups"; Accessible.name: "Help: Account files and recovery groups"; text: "Each saved account has an encrypted file. Ethereum accounts use standard keystore JSON files; Bitcoin accounts use Bitcoin account files. Accounts derived from one recovery phrase are grouped together. An optional, separate encrypted recovery source lets you add more accounts later. Hardware accounts are managed in their device app." }
+            }
+            LogosText {
+                text: "Wallets and accounts kept on this computer"
+                color: Theme.palette.textSecondary
+                font.pixelSize: Theme.typography.secondaryText
             }
         }
+        Item { Layout.fillWidth: true }
+        LogosBadge {
+            objectName: "custodianBadge"
+            text: root.custodian ? "CUSTODIAN" : "READ ONLY"
+            color: root.custodian ? Theme.palette.success : Theme.palette.warning
+        }
+    }
+
+    ColumnLayout {
+        // The content column, capped and centred at 560 like the Keycard and Signer apps.
+        anchors.top: pageHeader.bottom
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.margins: Theme.spacing.medium
+        width: Math.min(parent.width - 2 * Theme.spacing.medium, 560)
+        spacing: Theme.spacing.small
 
         // Said once, plainly, rather than letting every button fail one screen later.
         LogosText {
@@ -611,11 +642,11 @@ Item {
             shown: root.lockedWallets > 0
             visible: shown
             title: root.lockedWallets === 1 ? "1 wallet is locked" : root.lockedWallets + " wallets are locked"
-            message: root.lockedWallets === 1 ? "Its accounts show here once you unlock it in the Signer app."
-                                              : "Their accounts show here once you unlock them in the Signer app."
+            message: root.lockedWallets === 1 ? "Unlock it to see its accounts." : "Unlock them to see their accounts."
             actions: [
                 LogosButton {
                     objectName: "lockedUnlockButton"
+                    variant: LogosButton.Variant.Primary
                     text: "Unlock"
                     // This keystore's wallets only: the Signer app takes them one after another.
                     onClicked: logos.request("wallets.unlock", ({ seeds: root.j(root.backend.lockedSeedsJson, "[]"), signer: "keystore_module" }), function (res) {
@@ -739,23 +770,52 @@ Item {
             }
         }
 
+        // With wallets listed, Add accounts on each card is the primary action: Create and Import are
+        // secondary, side by side. With nothing listed, the empty state's Create is the primary.
         RowLayout {
+            visible: root.seedNodes.length > 0 || root.lockedWallets > 0
+            Layout.fillWidth: true
             spacing: Theme.spacing.small
-            LogosButton { objectName: "newAccountButton"; text: "Create"; enabled: root.custodian; onClicked: { accountFlow.mode = "create"; accountFlow.open() } }
-            LogosButton { objectName: "importAccountsButton"; text: "Import"; enabled: root.custodian; onClicked: { accountFlow.mode = "import"; accountFlow.open() } }
+            LogosButton { objectName: "newAccountButton"; Layout.fillWidth: true; text: "Create wallet"; enabled: root.custodian; onClicked: { accountFlow.mode = "create"; accountFlow.open() } }
+            LogosButton { objectName: "importAccountsButton"; Layout.fillWidth: true; text: "Import wallet"; enabled: root.custodian; onClicked: { accountFlow.mode = "import"; accountFlow.open() } }
         }
 
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            LogosText {
+            // Empty state, as in the Keycard app: a centred block with its own buttons.
+            ColumnLayout {
                 objectName: "accountsEmpty"
-                anchors.centerIn: parent
-                visible: root.seedNodes.length === 0 && !root.treeReadRefused
-                text: root.lockedWallets > 0 ? "No unlocked keystore files. Unlock a wallet, or create or import accounts."
-                                             : "No keystore files yet. Create or import accounts to get started."
-                color: Theme.palette.textSecondary
+                anchors.top: parent.top
+                anchors.topMargin: Theme.spacing.xxlarge
+                anchors.left: parent.left
+                anchors.right: parent.right
+                // Not while a wallet is locked: the banner above is the whole message then.
+                visible: root.seedNodes.length === 0 && !root.treeReadRefused && root.lockedWallets === 0
+                spacing: Theme.spacing.small
+                LogosText {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.lockedWallets > 0 ? "No unlocked wallets" : "No wallets yet"
+                    font.pixelSize: Theme.typography.subtitleText
+                    font.weight: Theme.typography.weightBold
+                }
+                LogosText {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: Theme.palette.textSecondary
+                    text: root.lockedWallets > 0 ? "Unlock a wallet above, or create or import one."
+                                                 : "Create a new wallet with a recovery phrase, or import one you have."
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: Theme.spacing.small
+                    spacing: Theme.spacing.small
+                    LogosButton { objectName: "emptyCreate"; variant: LogosButton.Variant.Primary; text: "Create wallet"; enabled: root.custodian; onClicked: { accountFlow.mode = "create"; accountFlow.open() } }
+                    LogosButton { objectName: "emptyImport"; text: "Import"; enabled: root.custodian; onClicked: { accountFlow.mode = "import"; accountFlow.open() } }
+                }
             }
             LogosText {
                 objectName: "accountsUnreadable"
@@ -798,7 +858,7 @@ Item {
                                 Layout.fillWidth: true
                                 namePrefix: "wallet" + seedBranch.index + "_"
                                 title: seedBranch.bundle.seed ? root.seedTitleOf(seedBranch.bundle, seedBranch.index) : ""
-                                fingerprint: seedBranch.bundle.seed ? Tree.cardFingerprint(seedBranch.bundle) : ""
+                                walletId: seedBranch.bundle.seed ? Tree.cardFingerprint(seedBranch.bundle) : ""
                                 lines: seedBranch.bundle.seed ? Tree.cardLines(seedBranch.bundle) : []
                                 strips: seedBranch.bundle.seed
                                         ? root.gated(Tree.cardStrips(seedBranch.bundle, seedBranch.keptId !== "", root.derivationKeys,
@@ -807,6 +867,8 @@ Item {
                                 accounts: seedBranch.bundle.seed ? root.cardAccounts(seedBranch.bundle) : []
                                 emptyText: "No accounts yet."
                                 actions: root.walletActions(seedBranch.bundle)
+                                editIcon: root.iconEdit
+                                trashIcon: root.iconTrash
                                 accountActions: root.rowActions
                                 onAction: function (id) { root.walletAction(seedBranch.bundle, seedBranch.index, id) }
                                 onStripAction: function (i, id) { root.stripAction(seedBranch.bundle, card.strips[i], id) }
