@@ -75,7 +75,7 @@ LogosDialog {
             if (request !== generation || !sheet.opened) return
             working = false
             generated = p || ""
-            if (!generated) notice = backend.lastError
+            if (!generated) notice = backend.lastError || "Could not make a recovery phrase."
         })
     }
     function source() {
@@ -236,6 +236,15 @@ LogosDialog {
                             text: "Show recovery phrase"
                             enabled: sheet.generated.length > 0
                             onClicked: sheet.revealed = true
+                        }
+                        // A failed generation leaves nothing to reveal, and New phrase sits behind the
+                        // reveal: offer the retry here, under the notice that says what went wrong.
+                        LogosButton {
+                            objectName: "flowRetryPhrase"
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: !sheet.working && sheet.generated.length === 0 && sheet.notice.length > 0
+                            text: "Try again"
+                            onClicked: sheet.generatePhrase()
                         }
                     }
                     RowLayout {
@@ -399,6 +408,7 @@ LogosDialog {
                     Repeater {
                         model: sheet.rows
                         delegate: Rectangle {
+                            id: tile
                             required property var modelData
                             required property int index
                             readonly property bool canToggle: !sheet.working && !modelData.present && (sheet.chosen(sheet.rowKey(modelData)) || sheet.selected.length < 20)
@@ -410,8 +420,8 @@ LogosDialog {
                             border.color: rowHover.hovered ? Theme.palette.border : Theme.palette.borderSubtle
                             opacity: modelData.present ? 0.6 : 1.0
                             implicitHeight: rowInner.implicitHeight + 2 * Theme.spacing.small
-                            HoverHandler { id: rowHover; enabled: parent.canToggle }
-                            TapHandler { enabled: parent.canToggle; onTapped: sheet.toggle(modelData, !sheet.chosen(sheet.rowKey(modelData))) }
+                            HoverHandler { id: rowHover; enabled: tile.canToggle }
+                            TapHandler { enabled: tile.canToggle; onTapped: sheet.toggle(modelData, !sheet.chosen(sheet.rowKey(modelData))) }
                             RowLayout {
                                 id: rowInner
                                 anchors.left: parent.left; anchors.right: parent.right
@@ -420,7 +430,7 @@ LogosDialog {
                                 spacing: Theme.spacing.small
                                 LogosCheckbox {
                                     objectName: "flowSelect_" + index
-                                    enabled: parent.parent.canToggle
+                                    enabled: tile.canToggle
                                     checkable: false
                                     checked: sheet.chosen(sheet.rowKey(modelData)) || modelData.present
                                     onClicked: sheet.toggle(modelData, !sheet.chosen(sheet.rowKey(modelData)))
@@ -510,7 +520,6 @@ LogosDialog {
                             LogosCheckbox { id: keep; objectName: "flowKeepRecovery"; text: "Keep an encrypted recovery source" }
                             LogosInfoButton { objectName: "recoverySourceInfo"; title: "Keeping a recovery source"; Accessible.name: "Help: Keeping a recovery source"; text: "Account files hold only the keys needed for the selected accounts. The optional recovery source is a separate encrypted file, under this same password, that can derive more accounts from the phrase later. Without it, you type the recovery phrase again to add accounts. Keep your own written backup either way; a BIP39 passphrase is not saved here." }
                         }
-                        LogosText { objectName: "flowWalletPassword"; visible: false; text: "" }
                     }
                 }
                 LogosText {
@@ -522,8 +531,8 @@ LogosDialog {
         }
         RowLayout {
             Layout.fillWidth: true
-            // Left: Cancel on the first step, Back after, as in the Keycard app.
-            LogosButton { objectName: "flowCancel"; text: "Cancel"; visible: !(sheet.step > 0 || (sheet.requested && sheet.step === 0)); enabled: !sheet.working; onClicked: sheet.close() }
+            // Left: Cancel on every step (the dialog has no close button on desktop), Back beside it after the first.
+            LogosButton { objectName: "flowCancel"; text: "Cancel"; enabled: !sheet.working; onClicked: sheet.close() }
             LogosButton {
                 objectName: "flowBack"; text: "Back"; visible: sheet.step > 0 || (sheet.requested && sheet.step === 0); enabled: !sheet.working
                 onClicked: { if (sheet.step === 0) { sheet.clearSecrets(); sheet.keptId = ""; sheet.walletSeed = ""; hasPassphrase.checked = false; sheet.mode = "request" }; sheet.step--; sheet.notice = ""; if (sheet.step === 0) { sheet.rows = []; sheet.selected = [] } }

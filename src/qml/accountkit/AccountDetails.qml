@@ -14,15 +14,16 @@ Item {
     // Labels, or { id, label, enabled, tip }; or a function of the entry that returns them.
     property var actions: []
     // Icons for the inline edit (rename) by the name and the trash (remove) at the far right.
+    // Without them, rename and remove stay text buttons with the app's other actions.
     property url editIcon: ""
     property url trashIcon: ""
     signal action(string id, var entry)
     signal copied(string value)
 
     readonly property var shown: Roster.actions(actions, entry)
-    readonly property var editAction: shown.filter(function (a) { return a.id === "rename" })[0] || null
-    readonly property var removeAction: shown.filter(function (a) { return a.id === "remove" })[0] || null
-    readonly property var otherActs: shown.filter(function (a) { return ["rename", "remove"].indexOf(a.id) < 0 })
+    readonly property var editAction: editIcon.toString() ? shown.filter(function (a) { return a.id === "rename" })[0] || null : null
+    readonly property var removeAction: trashIcon.toString() ? shown.filter(function (a) { return a.id === "remove" })[0] || null : null
+    readonly property var otherActs: shown.filter(function (a) { return a !== row.editAction && a !== row.removeAction })
     readonly property string address: Roster.rowAddress(entry)
     implicitHeight: layout.implicitHeight
     implicitWidth: 480
@@ -68,9 +69,9 @@ Item {
                     spacing: 8
                     LogosText {
                         objectName: row.namePrefix + "Id"
-                        // Not for an Ethereum account: the derivation path below already carries its
-                        // index, as in the Keycard app. A Bitcoin account keeps its number.
-                        visible: text.length > 0 && !(row.entry && row.entry.family === "evm")
+                        // Not shown: the derivation path below already carries the account's index,
+                        // as in the Keycard app (m/84'/1'/0' is account 0).
+                        visible: false
                         text: Roster.rowId(row.entry)
                         textFormat: Text.PlainText
                         color: Theme.palette.textSecondary
@@ -78,12 +79,16 @@ Item {
                     }
                     Repeater {
                         model: Roster.badges(row.entry)
-                        delegate: LogosBadge {
+                        // Tags in the Activity / Keycard style: bold text, no border.
+                        delegate: LogosText {
                             required property string modelData
                             required property int index
                             objectName: row.namePrefix + "Badge_" + index
                             text: modelData
+                            textFormat: Text.PlainText
                             color: Theme.palette.textSecondary
+                            font.weight: Theme.typography.weightBold
+                            font.pixelSize: Theme.typography.secondaryText
                         }
                     }
                 }
@@ -144,6 +149,9 @@ Item {
                     id: oa
                     required property var modelData
                     objectName: row.namePrefix + "Action_" + Roster.actionName(modelData)
+                    enabled: modelData.enabled
+                    // The button's click, for whatever holds the action by its object name.
+                    function clicked() { if (enabled) row.action(oa.modelData.id, row.entry) }
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: modelData.icon ? 28 : oaText.implicitWidth
                     implicitHeight: modelData.icon ? 28 : oaText.implicitHeight

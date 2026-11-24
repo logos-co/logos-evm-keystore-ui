@@ -13,9 +13,30 @@ The home screen lists keystore files, grouped by their verified recovery source.
 entry points: **Create** and **Import**. Keycard/device inventory, global unlocked-account lists,
 and open-wallet lists are not part of this screen.
 
-Create generates a phrase, asks the person to back it up and confirm three words, and then
-opens **Choose accounts**. Import offers a keystore file (native file picker or pasted JSON),
-a recovery phrase, or a private key. Recovery phrase import uses the same account chooser.
+It is laid out as the Keycard and Signer apps are: a full-width title row over a centred column at
+most 560 px wide, and one primary action per state: **Create wallet** when there is nothing yet,
+**Unlock** while a wallet is locked (the locked banner is then the whole message), and **Add
+accounts** on each wallet card. Create and Import are secondary otherwise.
+
+Create is four steps, as the Keycard app's add flow: a centred "Step N of 4" header, one concern
+a step, **Cancel** on every step and **Back** beside it after the first, the forward action as the
+primary button.
+
+1. **Recovery phrase.** A new phrase is generated but not shown: a warning (no one watching,
+   nothing recording the screen, paper ready) and **Show recovery phrase** come first. Then the
+   words as a numbered grid, with the length (12, 18 or 24 words) and **New phrase**. After
+   **I've written it down**, three words picked at random are typed back, each checked as it is
+   left; **Continue** needs all three. If the phrase can't be generated, the error shows with
+   **Try again**.
+2. **Choose accounts** (below).
+3. **Name them:** the wallet's optional name, and one optional name per chosen account.
+4. **Set a password** (below).
+
+The phrase lives only in the sheet: closing it, a new phrase, and Back to an open request's
+picker clear it and the three typed words.
+
+Import offers a keystore file (native file picker or pasted JSON), a recovery phrase, or a private
+key. Recovery phrase import types the phrase on step 1 and then takes the same three steps.
 
 The chooser previews five rows at a time without saving keys or contacting a network.
 Selections survive pagination and changes between Ethereum and Bitcoin. Ethereum defaults to
@@ -24,7 +45,7 @@ native SegWit, with test networks and Taproot available. A Bitcoin row represent
 account at `m/purpose'/coin'/account'`, previewing its first receive address, not a single-address
 wallet. Existing accounts are marked **Already saved** and cannot be selected.
 
-**Save files** asks for an optional group name and one confirmed password. Each Ethereum
+**Set a password** asks for one password, typed twice. Each Ethereum
 account is independently encrypted as a standard Web3 V3 JSON file. Bitcoin retains its existing
 encrypted account-key/descriptor format, including both receive and change branches. The optional
 **Keep an encrypted recovery source** writes one separate phrase vault under the same password,
@@ -41,17 +62,25 @@ on its wallet's card.
 
 A wallet is drawn as the Signer and Keycard apps draw it, with
 [logos-account-kit](https://github.com/logos-co/logos-account-kit)'s `WalletCard`: its name, its
-**Wallet ID** (the master fingerprint, from `list_groups`' `fingerprint`), and one row per account
-with its name, number, derivation path and address (a Bitcoin account's first receiving address).
+**Wallet ID** (the master fingerprint, from `list_groups`' `fingerprint`, passed as `walletId`), and
+one row per account with its name, derivation path and address (a Bitcoin account's first address).
+An unnamed account reads as what it is plus its number, "Ethereum 0" or "Bitcoin 0"; the path
+carries the index, so no separate number shows. Signers holding an account are short tags
+("Keystore", "Keycard"). The app opts into the kit's Keycard-style layout: `primaryAdd` makes
+**Add accounts** the card's full-width primary button (`wallet<N>_Action_add`), and `editIcon` /
+`trashIcon` turn rename and remove into a pencil beside the name and a trash icon, on the card and
+on each row. The icons, and the password icon, are Status's (StatusQ, MPL-2.0), in
+`src/qml/assets/`.
 What only this app knows sits on the card as strips: a kept recovery phrase (**Show or forget…**),
 an older derivation key (**Add account…**, **Stop keeping…**), an empty Ethereum file
 (**Remove…**), and a wallet whose phrase has to come again.
 
-- **Each row:** **Rename…**, **Remove…**, and **Export…** (Ethereum) or **Descriptor…** (Bitcoin).
+- **Each row:** **Rename…**, **Remove…**, and **Export keystore file…** (Ethereum) or
+  **Descriptor…** (Bitcoin). Actions with an icon show the icon, with the label as its tooltip.
   Removing a Bitcoin account uses `delete_bitcoin_account`; an Ethereum file left with no account
   is removed with it.
-- **The wallet, beside its name:** **Add accounts…**, **Rename…**, **Change password…** and
-  **Remove wallet…**. One password opens every file of a wallet: `change_wallet_password` moves each
+- **The wallet:** **Add accounts** under its rows; **Rename…** (pencil), **Change password…** and
+  **Remove wallet…** (trash) beside its name. One password opens every file of a wallet: `change_wallet_password` moves each
   file the given password opens, and names what is still under another one, so each of those is
   asked for once.
 - **Removing a wallet** (`remove_wallet`) takes its password and removes every account and file
@@ -67,7 +96,7 @@ an older derivation key (**Add account…**, **Stop keeping…**), an empty Ethe
   address's label (`set_label`, also when it is named while being added), a Bitcoin account's
   is its file's.
 - An account no wallet holds (imported, or from a wallet not listed here) keeps its own row and
-  its own password: **Rename…**, **Remove…**, **Export…** and **Password…**.
+  its own password: **Rename…**, **Remove…**, **Export keystore file…** and **Change password…**.
 
 The backend checks the entire selection before saving, refuses duplicates, and reports the
 successful subset on an I/O failure. The UI removes saved selections before retrying, so a

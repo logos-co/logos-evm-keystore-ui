@@ -753,7 +753,11 @@ print("5) Add accounts sits on the wallet it adds to")
 check("no global add button", oid("addAccountButton") is None, True)
 if cards:
     c = cards[0]["i"]
-    if oid(f"wallet{c}_Action_add") is not None:
+    # The card's own full-width button (WalletCard's `primaryAdd`). A missing one is a failure,
+    # not a skip: this section is the only one that says where Add accounts lives.
+    add = props(f"wallet{c}_Action_add")
+    check("the card has its Add accounts button", bool(add.get("visible")), True)
+    if add.get("visible"):
         click(f"wallet{c}_Action_add")
         check("the account wizard opened", props("accountFlowSheet").get("opened"), True)
         click("flowCancel")

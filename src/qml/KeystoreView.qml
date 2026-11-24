@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Dialogs
 import Logos.Controls
+import Logos.Icons
 import Logos.Theme
 import "tree.js" as Tree
 import "accountkit" as Accounts
@@ -869,6 +870,8 @@ Item {
                                 actions: root.walletActions(seedBranch.bundle)
                                 editIcon: root.iconEdit
                                 trashIcon: root.iconTrash
+                                // Add accounts as the card's full-width primary button, as the Keycard app has it.
+                                primaryAdd: true
                                 accountActions: root.rowActions
                                 onAction: function (id) { root.walletAction(seedBranch.bundle, seedBranch.index, id) }
                                 onStripAction: function (i, id) { root.stripAction(seedBranch.bundle, card.strips[i], id) }

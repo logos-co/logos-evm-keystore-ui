@@ -81,8 +81,9 @@ if __name__ == '__main__':
     select_coin(1); click('flowSelect_0')
     assert value('selected.length', 'accountFlowSheet') == 3
     assert value('groups.length === 0 && accounts.length === 0 && phrases.length === 0')
-    click('flowReview'); click('flowToPassword')
+    click('flowReview')
     setp('flowName', 'text', 'Personal test')
+    click('flowToPassword')
     setp('flowPassword', 'text', 'flow-test-password')
     setp('flowRepeatPassword', 'text', 'different')
     assert value('enabled', 'flowSave') is False
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     assert value('groups.every(function(g) { return !g.family ? !g.derivable : true })')
     print('PASS: selection survives pagination and coin changes; independent EVM files plus a Bitcoin account share one encrypted source', flush=True)
 
-    click('wallet0_AddAccounts')
+    click('wallet0_Action_add')
     setp('flowPhrasePassword', 'text', 'wrong')
     click('flowContinue'); wait('!working', 'accountFlowSheet')
     assert value('step === 0 && notice.length > 0', 'accountFlowSheet')
