@@ -31,6 +31,11 @@ LogosDialog {
     function clear() { oldPw.text = ""; newPw.text = ""; repeatPw.text = ""; sheet.tried = [] }
     onOpened: { clear(); sheet.left = []; sheet.working = false; sheet.attempted = false; sheetError.clear() }
     onClosed: { clear(); sheet.left = []; sheetError.clear() }
+    // Why the button is still off, once something is typed.
+    readonly property string hint:
+          !sheet.more && repeatPw.text.length > 0 && repeatPw.text !== newPw.text ? "The two new passwords don't match."
+        : newPw.text.length > 0 && oldPw.text.length === 0 ? (sheet.more ? "Type the password they use." : "Type the current password too.")
+        : ""
 
     function submit() {
         var olds = sheet.tried.concat(oldPw.text.length ? [oldPw.text] : [])
@@ -99,6 +104,14 @@ LogosDialog {
             Layout.fillWidth: true
             echoMode: TextInput.Password
             placeholderText: sheet.more ? "The password they use" : "Current password"
+        }
+        LogosText {
+            objectName: "walletPasswordHint"
+            Layout.fillWidth: true
+            visible: text.length > 0
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: sheet.hint
         }
         SheetError { id: sheetError; objectName: "walletPasswordError" }
         RowLayout {

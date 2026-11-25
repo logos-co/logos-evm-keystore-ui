@@ -169,6 +169,14 @@ LogosDialog {
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
 
+        LogosText {
+            objectName: "accessPasswordHint"
+            Layout.fillWidth: true
+            visible: text.length > 0
+            wrapMode: Text.WordWrap
+            color: Theme.palette.textSecondary
+            text: sheet.firstOpen && pwAgain.text.length > 0 && pwAgain.text !== pw.text ? "The two passwords don't match." : ""
+        }
         SheetError { id: sheetError; objectName: "accessError" }
         RowLayout {
             Layout.fillWidth: true
