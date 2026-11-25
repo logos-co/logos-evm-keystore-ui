@@ -8,6 +8,7 @@ import Logos.Theme
 import "tree.js" as Tree
 import "accountkit" as Accounts
 import "accountkit/roster.js" as Roster
+import "errors.js" as Errors
 
 // The keystore: the only surface that creates, imports, exports or deletes an account. Which
 // node an account belongs to is decided in tree.js, where a table can run it; why the screen
@@ -61,6 +62,27 @@ Item {
         }
         if (intent !== "evm.accounts.manage") return
         logos.respond(requestId, true, ({}), "")
+    }
+
+    // ── one error, one place ───────────────────────────────────────────────────────
+    // The backend keeps a single lastError for every action, and it stays set until the next
+    // action succeeds. Each sheet reads it as its own call answers and shows it itself
+    // (SheetError), so the page line shows only what the page did: never while a sheet is up,
+    // and never an error already on screen before a sheet opened or closed.
+    readonly property var sheets: [addSheet, accessSheet, bitcoinWalletSheet, keptPhraseSheet, walletNameSheet,
+        addAgainSheet, walletSheet, removeSeedWalletDialog, removeWalletDialog, accountFlow, keySheet, vaultSheet,
+        renameAccountSheet, removeAccountSheet, exportAccountSheet, accountPasswordSheet, walletPasswordSheet,
+        forgetKeyDialog]
+    readonly property bool sheetUp: sheets.some(function (s) { return s && s.visible })
+    property string errorSeen: ""
+    onSheetUpChanged: root.errorSeen = root.ready ? root.backend.lastError : ""
+    // An action on the page itself: its answer shows on the page, even worded as the last one.
+    function pageAction() { root.errorSeen = "" }
+    readonly property string pageError:
+        !ready || sheetUp || root.backend.lastError === errorSeen ? "" : Errors.human(root.backend.lastError)
+    Connections {
+        target: root.ready ? root.backend : null
+        function onLastErrorChanged() { if (root.backend.lastError === "") root.errorSeen = "" }
     }
 
     // Intents being serviced, keyed by the manager's handle each one named.
@@ -628,11 +650,11 @@ Item {
         LogosText {
             objectName: "errorLabel"
             Layout.fillWidth: true
-            visible: root.ready && root.backend.lastError.length > 0
+            visible: root.pageError.length > 0
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.palette.error
-            text: root.ready ? root.backend.lastError : ""
+            text: root.pageError
         }
 
         // A locked wallet lists none of its files, so say it is here rather than look empty.
@@ -675,7 +697,9 @@ Item {
                     enabled: root.custodian && !root.movingOlder
                     onClicked: {
                         root.movingOlder = true
-                        logos.watch(root.backend.moveOlderKeystore(), function () { root.movingOlder = false })
+                        root.pageAction()
+                        logos.watch(root.backend.moveOlderKeystore(), function () { root.movingOlder = false },
+                                    function () { root.movingOlder = false })
                     }
                 }
             ]
@@ -930,8 +954,8 @@ Item {
                                                                  label: root.labelFor(address),
                                                                  path: root.hdPath((root.provFor(address) || {}).path) })
                                     }
-                                    onForgetKeyRequested: logos.watch(root.backend.forgetDerivation(modelData.id),
-                                                                      function () {})
+                                    onForgetKeyRequested: { root.pageAction(); logos.watch(root.backend.forgetDerivation(modelData.id),
+                                                                                           function () {}) }
                                 }
                             }
                         }
@@ -995,8 +1019,8 @@ Item {
         property bool kept: false
         property bool withPassword: true
         readonly property string withWhat: kept ? "its saved recovery phrase and its name" : "its name"
-        onOpened: { removeSeedAck.checked = false; removeSeedPassword.text = "" }
-        onClosed: { removeSeedAck.checked = false; removeSeedPassword.text = ""; seed = "" }
+        onOpened: { removeSeedAck.checked = false; removeSeedPassword.text = ""; removeSeedError.clear() }
+        onClosed: { removeSeedAck.checked = false; removeSeedPassword.text = ""; seed = ""; removeSeedError.clear() }
 
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
@@ -1037,13 +1061,7 @@ Item {
                 echoMode: TextInput.Password
                 placeholderText: "This wallet's password"
             }
-            LogosText {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Theme.palette.error
-                visible: text.length > 0
-                text: root.backend ? root.backend.lastError : ""
-            }
+            SheetError { id: removeSeedError; objectName: "removeSeedWalletError" }
             LogosCheckbox {
                 id: removeSeedAck
                 objectName: "removeSeedWalletAck"
@@ -1058,8 +1076,12 @@ Item {
                     text: "Remove wallet"
                     enabled: removeSeedAck.checked && removeSeedWalletDialog.seed !== ""
                              && (!removeSeedWalletDialog.withPassword || removeSeedPassword.text.length > 0)
-                    onClicked: logos.watch(root.backend.removeSeedWallet(removeSeedWalletDialog.seed, removeSeedPassword.text),
-                        function (good) { if (good) removeSeedWalletDialog.close() })
+                    onClicked: {
+                        removeSeedError.clear()
+                        logos.watch(root.backend.removeSeedWallet(removeSeedWalletDialog.seed, removeSeedPassword.text),
+                            function (good) { if (good) removeSeedWalletDialog.close(); else removeSeedError.take(root.backend, "Nothing was removed.") },
+                            function () { removeSeedError.lost() })
+                    }
                 }
             }
         }
@@ -1078,8 +1100,8 @@ Item {
         width: Math.min(parent.width - 40, 560)
 
         property var group: null
-        onOpened: removeAck.checked = false
-        onClosed: { removeAck.checked = false; group = null }
+        onOpened: { removeAck.checked = false; removeWalletError.clear() }
+        onClosed: { removeAck.checked = false; group = null; removeWalletError.clear() }
 
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
@@ -1125,6 +1147,7 @@ Item {
                 objectName: "removeWalletAck"
                 text: "I want this account file removed"
             }
+            SheetError { id: removeWalletError; objectName: "removeWalletError" }
             RowLayout {
                 Layout.fillWidth: true
                 LogosButton { objectName: "removeWalletCancel"; text: "Cancel"; onClicked: removeWalletDialog.close() }
@@ -1133,8 +1156,12 @@ Item {
                     objectName: "removeWalletConfirm"
                     text: "Remove this account file"
                     enabled: removeAck.checked && removeWalletDialog.group !== null
-                    onClicked: logos.watch(root.backend.removeWallet(removeWalletDialog.group.id),
-                        function (good) { if (good) removeWalletDialog.close() })
+                    onClicked: {
+                        removeWalletError.clear()
+                        logos.watch(root.backend.removeWallet(removeWalletDialog.group.id),
+                            function (good) { if (good) removeWalletDialog.close(); else removeWalletError.take(root.backend, "Nothing was removed.") },
+                            function () { removeWalletError.lost() })
+                    }
                 }
             }
         }
@@ -1159,8 +1186,8 @@ Item {
         title: "Import a private key"
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
-        onOpened: { keyField.text = ""; keyPw.text = "" }
-        onClosed: { keyField.text = ""; keyPw.text = "" }
+        onOpened: { keyField.text = ""; keyPw.text = ""; keyError.clear() }
+        onClosed: { keyField.text = ""; keyPw.text = ""; keyError.clear() }
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
             LogosTextField {
@@ -1177,6 +1204,7 @@ Item {
                 echoMode: TextInput.Password
                 placeholderText: "Password for this account"
             }
+            SheetError { id: keyError; objectName: "importKeyError" }
             RowLayout {
                 Layout.fillWidth: true
                 LogosButton { text: "Cancel"; onClicked: keySheet.close() }
@@ -1185,8 +1213,12 @@ Item {
                     objectName: "importKeyConfirm"
                     text: "Import"
                     enabled: keyField.text.trim().length > 0 && keyPw.text.length > 0
-                    onClicked: logos.watch(root.backend.importPrivateKey(keyField.text.trim(), keyPw.text),
-                        function (good) { if (good) keySheet.close() })
+                    onClicked: {
+                        keyError.clear()
+                        logos.watch(root.backend.importPrivateKey(keyField.text.trim(), keyPw.text),
+                            function (good) { if (good) keySheet.close(); else keyError.take(root.backend, "The key was not imported.") },
+                            function () { keyError.lost() })
+                    }
                 }
             }
         }
@@ -1199,8 +1231,8 @@ Item {
         anchors.centerIn: parent
         width: Math.min(parent.width - 40, 560)
         property string fileUrl: ""
-        onOpened: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = ""; pasteJson.checked = false }
-        onClosed: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = "" }
+        onOpened: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = ""; pasteJson.checked = false; vaultError.clear() }
+        onClosed: { fileUrl = ""; vaultField.text = ""; vaultOld.text = ""; vaultNew.text = ""; vaultError.clear() }
         FileDialog {
             id: vaultPicker
             title: "Choose an Ethereum keystore file"
@@ -1233,6 +1265,7 @@ Item {
                 echoMode: TextInput.Password
                 placeholderText: "Password to store it under here"
             }
+            SheetError { id: vaultError; objectName: "importVaultError" }
             RowLayout {
                 Layout.fillWidth: true
                 LogosButton { text: "Cancel"; onClicked: vaultSheet.close() }
@@ -1241,9 +1274,13 @@ Item {
                     objectName: "importVaultConfirm"
                     text: "Import"
                     enabled: (pasteJson.checked ? vaultField.text.trim().length > 0 : vaultSheet.fileUrl.length > 0) && vaultNew.text.length > 0
-                    onClicked: logos.watch(pasteJson.checked ? root.backend.importVaultJson(vaultField.text.trim(), vaultOld.text, vaultNew.text)
-                                                            : root.backend.importVaultFile(vaultSheet.fileUrl, vaultOld.text, vaultNew.text),
-                        function (good) { if (good) vaultSheet.close() })
+                    onClicked: {
+                        vaultError.clear()
+                        logos.watch(pasteJson.checked ? root.backend.importVaultJson(vaultField.text.trim(), vaultOld.text, vaultNew.text)
+                                                      : root.backend.importVaultFile(vaultSheet.fileUrl, vaultOld.text, vaultNew.text),
+                            function (good) { if (good) vaultSheet.close(); else vaultError.take(root.backend, "The file was not imported.") },
+                            function () { vaultError.lost() })
+                    }
                 }
             }
         }
@@ -1268,8 +1305,8 @@ Item {
         width: Math.min(parent.width - 40, 560)
 
         property var group: null
-        onOpened: forgetKeyAck.checked = false
-        onClosed: { forgetKeyAck.checked = false; group = null }
+        onOpened: { forgetKeyAck.checked = false; forgetKeyError.clear() }
+        onClosed: { forgetKeyAck.checked = false; group = null; forgetKeyError.clear() }
 
         contentItem: ColumnLayout {
             spacing: Theme.spacing.small
@@ -1284,6 +1321,7 @@ Item {
                       + "extendable, so adding another means typing the phrase again."
             }
             LogosCheckbox { id: forgetKeyAck; objectName: "forgetKeyAck"; text: "I understand this cannot be undone" }
+            SheetError { id: forgetKeyError; objectName: "forgetKeyError" }
             RowLayout {
                 Layout.fillWidth: true
                 LogosButton { objectName: "forgetKeyCancel"; text: "Cancel"; onClicked: forgetKeyDialog.close() }
@@ -1292,8 +1330,12 @@ Item {
                     objectName: "forgetKeyConfirm"
                     text: "Stop keeping the derivation key"
                     enabled: forgetKeyAck.checked && forgetKeyDialog.group !== null
-                    onClicked: logos.watch(root.backend.forgetDerivation(forgetKeyDialog.group.id),
-                        function (good) { if (good) forgetKeyDialog.close() })
+                    onClicked: {
+                        forgetKeyError.clear()
+                        logos.watch(root.backend.forgetDerivation(forgetKeyDialog.group.id),
+                            function (good) { if (good) forgetKeyDialog.close(); else forgetKeyError.take(root.backend, "The derivation key is still kept.") },
+                            function () { forgetKeyError.lost() })
+                    }
                 }
             }
         }

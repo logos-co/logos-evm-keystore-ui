@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
 import "accountkit" as Accounts
+import "errors.js" as Errors
 
 // An older build's wallet, added again so the Signer app can open it. A wallet takes its phrase,
 // checked against the accounts it already holds; a key its password. Nothing else changes: no
@@ -46,8 +47,8 @@ LogosDialog {
         logos.watch(backend.restoreUnlockRoot(JSON.stringify(p)), function (ok) {
             working = false
             if (ok) { sheet.added(); sheet.close() }
-            else notice = backend.lastError || "It was not added. Check the phrase and the password."
-        })
+            else notice = Errors.human(backend.lastError) || "It was not added. Check the phrase and the password."
+        }, function () { working = false; notice = "The Keys app did not answer. Try again." })
         p = {}
         clearSecrets()
     }
@@ -56,7 +57,7 @@ LogosDialog {
     width: Math.min(parent.width - 40, 600)
 
     onOpened: { clearSecrets(); notice = ""; working = false }
-    onClosed: { clearSecrets(); group = ""; account = ""; walletName = ""; keptId = ""; needsPassphrase = false }
+    onClosed: { clearSecrets(); notice = ""; group = ""; account = ""; walletName = ""; keptId = ""; needsPassphrase = false }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small

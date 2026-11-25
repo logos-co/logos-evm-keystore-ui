@@ -20,8 +20,8 @@ LogosDialog {
     width: Math.min(parent.width - 40, 520)
 
     function clear() { oldPw.text = ""; newPw.text = ""; repeatPw.text = "" }
-    onOpened: { clear(); working = false; tried = false }
-    onClosed: clear()
+    onOpened: { clear(); working = false; tried = false; sheetError.clear() }
+    onClosed: { clear(); sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -37,15 +37,7 @@ LogosDialog {
         LogosTextField { id: oldPw; objectName: "oldPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Current password" }
         LogosTextField { id: newPw; objectName: "newPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "New password" }
         LogosTextField { id: repeatPw; objectName: "repeatPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: "Confirm the new password" }
-        LogosText {
-            objectName: "accountPasswordError"
-            Layout.fillWidth: true
-            visible: sheet.tried && !sheet.working && text.length > 0
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "accountPasswordError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton { objectName: "accountPasswordCancel"; text: "Cancel"; onClicked: sheet.close() }
@@ -57,11 +49,12 @@ LogosDialog {
                 onClicked: {
                     sheet.working = true
                     sheet.tried = true
+                    sheetError.clear()
                     logos.watch(sheet.backend.changePassword(sheet.address, oldPw.text, newPw.text), function (good) {
                         sheet.working = false
                         if (good) sheet.close()
-                        else oldPw.text = ""
-                    })
+                        else { oldPw.text = ""; sheetError.take(sheet.backend, "The password was not changed.") }
+                    }, function () { sheet.working = false; sheetError.lost() })
                 }
             }
         }

@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
 import "accountkit" as Accounts
+import "errors.js" as Errors
 
 LogosDialog {
     id: sheet
@@ -60,6 +61,7 @@ LogosDialog {
     property var names: ({})
     property int page: 0
     property string notice: ""
+    readonly property string lostText: "The Keys app did not answer. Try again."
     signal importKey()
     signal importFile()
     signal saved(var groups)
@@ -75,8 +77,8 @@ LogosDialog {
             if (request !== generation || !sheet.opened) return
             working = false
             generated = p || ""
-            if (!generated) notice = backend.lastError || "Could not make a recovery phrase."
-        })
+            if (!generated) notice = Errors.human(backend.lastError) || "Could not make a recovery phrase."
+        }, function () { if (request === generation) { working = false; notice = sheet.lostText } })
     }
     function source() {
         var p = { passphrase: hasPassphrase.checked ? passphrase.text : "" }
@@ -101,9 +103,9 @@ LogosDialog {
         logos.watch(backend.previewSource(JSON.stringify(p)), function(reply) {
             working = false
             if (!sheet.opened) return
-            if (!reply) { notice = backend.lastError; return }
+            if (!reply) { notice = Errors.human(backend.lastError) || "Could not read the address preview."; return }
             try { rows = JSON.parse(reply); step = 1 } catch (e) { notice = "Could not read the address preview." }
-        })
+        }, function () { working = false; notice = sheet.lostText })
         p = {}
     }
     function refreshPage() { if (step === 1) { page = 0; preview() } }
@@ -124,8 +126,8 @@ LogosDialog {
             password.text = ""; repeatPassword.text = ""
             // Every account saved: what went wrong after that, such as a name, stays in the view.
             if (selected.length === 0) { sheet.saved(r.groups || []); sheet.close() }
-            else notice = (done.length ? "Saved " + done.length + " account(s). Remaining accounts were not saved. " : "") + (r.error || "Check the file list before retrying.")
-        })
+            else notice = (done.length ? "Saved " + done.length + " account(s). Remaining accounts were not saved. " : "") + (Errors.human(r.error) || "Check the file list before retrying.")
+        }, function () { working = false; notice = sheet.lostText })
         p = {}
     }
     onOpened: {

@@ -29,23 +29,24 @@ LogosDialog {
     width: Math.min(parent.width - 40, 560)
 
     function clear() { oldPw.text = ""; newPw.text = ""; repeatPw.text = ""; sheet.tried = [] }
-    onOpened: { clear(); sheet.left = []; sheet.working = false; sheet.attempted = false }
-    onClosed: { clear(); sheet.left = [] }
+    onOpened: { clear(); sheet.left = []; sheet.working = false; sheet.attempted = false; sheetError.clear() }
+    onClosed: { clear(); sheet.left = []; sheetError.clear() }
 
     function submit() {
         var olds = sheet.tried.concat(oldPw.text.length ? [oldPw.text] : [])
         sheet.working = true
         sheet.attempted = true
+        sheetError.clear()
         logos.watch(sheet.backend.changeWalletPassword(sheet.seed, JSON.stringify(olds), newPw.text), function (reply) {
             sheet.working = false
             var r = null
             try { r = reply ? JSON.parse(reply) : null } catch (e) {}
-            if (!r) { oldPw.text = ""; return }
+            if (!r) { oldPw.text = ""; sheetError.take(sheet.backend, "The password was not changed."); return }
             sheet.tried = olds
             oldPw.text = ""
             sheet.left = r.left || []
             if (sheet.left.length === 0) sheet.close()
-        })
+        }, function () { sheet.working = false; sheetError.lost() })
     }
 
     contentItem: ColumnLayout {
@@ -99,15 +100,7 @@ LogosDialog {
             echoMode: TextInput.Password
             placeholderText: sheet.more ? "The password they use" : "Current password"
         }
-        LogosText {
-            objectName: "walletPasswordError"
-            Layout.fillWidth: true
-            visible: sheet.attempted && !sheet.working && text.length > 0
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "walletPasswordError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton {

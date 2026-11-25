@@ -22,8 +22,8 @@ LogosDialog {
 
     readonly property string name: rowTitle || ((view && group) ? (view.walletNameOf(group.id) || group.id) : "")
 
-    onOpened: { external = ""; internal = "" }
-    onClosed: { external = ""; internal = "" }
+    onOpened: { external = ""; internal = ""; sheetError.clear() }
+    onClosed: { external = ""; internal = ""; sheetError.clear() }
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 640)
@@ -68,13 +68,17 @@ LogosDialog {
             objectName: "btcShowDescriptor"
             visible: sheet.external.length === 0
             text: "Show descriptor"
-            onClicked: logos.watch(sheet.backend.walletDescriptors(sheet.group.id), function (json) {
-                try {
-                    const d = JSON.parse(json || "{}")
-                    sheet.external = d.external || ""
-                    sheet.internal = d.internal || ""
-                } catch (e) {}
-            })
+            onClicked: {
+                sheetError.clear()
+                logos.watch(sheet.backend.walletDescriptors(sheet.group.id), function (json) {
+                    try {
+                        const d = JSON.parse(json || "{}")
+                        sheet.external = d.external || ""
+                        sheet.internal = d.internal || ""
+                    } catch (e) {}
+                    if (sheet.external.length === 0) sheetError.take(sheet.backend, "Could not read the descriptor.")
+                }, function () { sheetError.lost() })
+            }
         }
         LogosText {
             objectName: "btcExternalDescriptor"
@@ -95,6 +99,7 @@ LogosDialog {
             text: sheet.internal
         }
 
+        SheetError { id: sheetError; objectName: "btcWalletError" }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }

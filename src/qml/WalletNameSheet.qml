@@ -60,9 +60,10 @@ LogosDialog {
         sheet.askProof = false
         sheet.proofIndex = 0
         sheet.working = false
+        sheetError.clear()
         sheet.tried = false
     }
-    onClosed: password.text = ""
+    onClosed: { password.text = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -122,14 +123,7 @@ LogosDialog {
             echoMode: TextInput.Password
             placeholderText: "That account's password"
         }
-        LogosText {
-            objectName: "seedWalletNameError"
-            Layout.fillWidth: true
-            visible: sheet.tried && text.length > 0
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "seedWalletNameError" }
 
         RowLayout {
             Layout.fillWidth: true
@@ -146,15 +140,17 @@ LogosDialog {
                     var group = p ? p.group : sheet.bundle.nodes[0].group.id
                     sheet.working = true
                     sheet.tried = true
+                    sheetError.clear()
                     var call = sheet.fileOnly
                         ? sheet.backend.setWalletName(group, name, p ? p.address : "", p ? password.text : "")
                         : sheet.backend.setSeedWalletName(group, name, p ? p.address : "", p ? password.text : "")
                     logos.watch(call, function (good) {
                         sheet.working = false
                         password.text = ""
-                        if (good) sheet.close()
-                        else if (name.length > 0) sheet.askProof = true
-                    })
+                        if (good) { sheet.close(); return }
+                        sheetError.take(sheet.backend, "The name was not saved.")
+                        if (name.length > 0) sheet.askProof = true
+                    }, function () { sheet.working = false; sheetError.lost() })
                 }
             }
         }

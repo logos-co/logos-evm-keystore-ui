@@ -27,8 +27,8 @@ LogosWarningDialog {
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
 
-    onOpened: { password.text = ""; ack.checked = false; sheet.working = false; sheet.tried = false }
-    onClosed: { password.text = ""; ack.checked = false }
+    onOpened: { password.text = ""; ack.checked = false; sheet.working = false; sheet.tried = false; sheetError.clear() }
+    onClosed: { password.text = ""; ack.checked = false; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -82,15 +82,7 @@ LogosWarningDialog {
             objectName: "removeAccountAck"
             text: "I want this account removed"
         }
-        LogosText {
-            objectName: "removeAccountError"
-            Layout.fillWidth: true
-            visible: sheet.tried && !sheet.working && text.length > 0
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "removeAccountError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton { objectName: "removeAccountCancel"; text: "Cancel"; onClicked: sheet.close() }
@@ -102,13 +94,15 @@ LogosWarningDialog {
                 onClicked: {
                     sheet.working = true
                     sheet.tried = true
+                    sheetError.clear()
                     var call = sheet.bitcoin ? sheet.backend.deleteBitcoinAccount(sheet.entry.group, password.text)
                                              : sheet.backend.deleteAccount(sheet.entry.address, password.text)
                     logos.watch(call, function (good) {
                         sheet.working = false
                         password.text = ""
                         if (good) sheet.close()
-                    })
+                        else sheetError.take(sheet.backend, "Nothing was removed.")
+                    }, function () { sheet.working = false; sheetError.lost() })
                 }
             }
         }

@@ -31,23 +31,26 @@ LogosDialog {
         sheet.askPassword = false
         sheet.working = false
         sheet.tried = false
+        sheetError.clear()
     }
-    onClosed: password.text = ""
+    onClosed: { password.text = ""; sheetError.clear() }
 
     function save() {
         var name = nameField.text.trim()
         var pw = sheet.askPassword ? password.text : ""
         sheet.working = true
         sheet.tried = true
+        sheetError.clear()
         var call = sheet.bitcoin ? sheet.backend.setWalletName(sheet.entry.group, name, "", pw)
                                  : sheet.backend.setLabel(sheet.entry.address, name, pw)
         logos.watch(call, function (good) {
             sheet.working = false
             password.text = ""
-            if (good) sheet.close()
+            if (good) { sheet.close(); return }
+            sheetError.take(sheet.backend, "The name was not saved.")
             // A wallet not unlocked this session proves custody with the account's password.
-            else if (name.length > 0) sheet.askPassword = true
-        })
+            if (name.length > 0) sheet.askPassword = true
+        }, function () { sheet.working = false; sheetError.lost() })
     }
 
     contentItem: ColumnLayout {
@@ -93,15 +96,7 @@ LogosDialog {
             echoMode: TextInput.Password
             placeholderText: "That account's password"
         }
-        LogosText {
-            objectName: "renameAccountError"
-            Layout.fillWidth: true
-            visible: sheet.tried && !sheet.working && text.length > 0
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "renameAccountError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton { objectName: "renameAccountCancel"; text: "Cancel"; onClicked: sheet.close() }

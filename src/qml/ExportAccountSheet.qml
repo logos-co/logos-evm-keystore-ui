@@ -18,8 +18,8 @@ LogosDialog {
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
 
-    onOpened: { exported = ""; password.text = "" }
-    onClosed: { exported = ""; password.text = "" }
+    onOpened: { exported = ""; password.text = ""; sheetError.clear() }
+    onClosed: { exported = ""; password.text = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -59,6 +59,7 @@ LogosDialog {
             font.pixelSize: Theme.typography.secondaryText
             text: sheet.exported
         }
+        SheetError { id: sheetError; objectName: "exportError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton { objectName: "exportClose"; text: "Close"; onClicked: sheet.close() }
@@ -73,8 +74,15 @@ LogosDialog {
                 objectName: "exportConfirm"
                 text: "Export vault JSON"
                 enabled: password.text.length > 0
-                onClicked: logos.watch(sheet.backend.exportVaultJson(sheet.address, password.text),
-                    function (vault) { sheet.exported = vault || ""; password.text = "" })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheet.backend.exportVaultJson(sheet.address, password.text),
+                        function (vault) {
+                            sheet.exported = vault || ""
+                            password.text = ""
+                            if (!vault) sheetError.take(sheet.backend, "Nothing was exported.")
+                        }, function () { sheetError.lost() })
+                }
             }
         }
     }

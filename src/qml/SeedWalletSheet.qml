@@ -29,8 +29,8 @@ LogosDialog {
         while (used[n]) ++n
         account.text = String(n)
     }
-    onOpened: { clearSecrets(); working = false; walletName.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
-    onClosed: { clearSecrets(); working = false }
+    onOpened: { clearSecrets(); working = false; sheetError.clear(); walletName.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
+    onClosed: { clearSecrets(); working = false; sheetError.clear() }
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 620)
     contentItem: ColumnLayout {
@@ -98,13 +98,7 @@ LogosDialog {
             visible: sheet.family === "evm"
             text: "Allow adding Ethereum addresses with this wallet password"
         }
-        LogosText {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "seedAddError" }
         RowLayout {
             LogosButton { text: "Cancel"; enabled: !sheet.working; onClicked: sheet.close() }
             Item { Layout.fillWidth: true }
@@ -123,9 +117,14 @@ LogosDialog {
                     if (sheet.keptId) { p.keptPhrase = sheet.keptId; p.phrasePassword = phrasePw.text }
                     else p.phrase = words.text
                     sheet.working = true
+                    sheetError.clear()
                     var reply = sheet.backend.addSeedWallet(JSON.stringify(p))
                     p = {}; sheet.clearSecrets()
-                    logos.watch(reply, function(ok) { sheet.working = false; if (ok) sheet.close() })
+                    logos.watch(reply, function(ok) {
+                        sheet.working = false
+                        if (ok) sheet.close()
+                        else sheetError.take(sheet.backend, "The wallet was not added.")
+                    }, function () { sheet.working = false; sheetError.lost() })
                 }
             }
         }

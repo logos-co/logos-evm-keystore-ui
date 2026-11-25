@@ -64,7 +64,9 @@ LogosDialog {
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 600)
 
+    onClosed: sheetError.clear()
     onOpened: {
+        sheetError.clear()
         picked = ""
         pw.text = ""
         pwAgain.text = ""
@@ -167,6 +169,7 @@ LogosDialog {
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
 
+        SheetError { id: sheetError; objectName: "accessError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton {
@@ -200,9 +203,13 @@ LogosDialog {
                          && (!sheet.firstOpen || pwAgain.text === pw.text)
                 onClicked: {
                     var h = sheet.shown.handle
+                    sheetError.clear()
                     logos.watch(sheet.backend.approveAccess(h, sheet.shown.bundle_id,
                                                            sheet.picks ? sheet.picked : "", pw.text),
-                                function (ok) { if (ok) { sheet.decided(h, true); sheet.close() } })
+                                function (ok) {
+                                    if (ok) { sheet.decided(h, true); sheet.close() }
+                                    else sheetError.take(sheet.backend, "It was not opened.")
+                                }, function () { sheetError.lost() })
                     pw.text = ""
                     pwAgain.text = ""
                 }

@@ -40,13 +40,14 @@ LogosDialog {
     width: Math.min(parent.width - 40, 620)
 
     onOpened: {
+        sheetError.clear()
         advanced = false
         previewRows = []
         walletPw.text = ""; accountPw.text = ""
         changeField.text = "0"
         followWallet()
     }
-    onClosed: { walletPw.text = ""; accountPw.text = ""; previewRows = [] }
+    onClosed: { walletPw.text = ""; accountPw.text = ""; previewRows = []; sheetError.clear() }
 
     // The path fields follow the wallet: another wallet's account level and next index mean
     // nothing here, and offering them would be an invitation to derive the wrong path.
@@ -115,9 +116,12 @@ LogosDialog {
             visible: sheet.derivable
             text: "Add account"
             enabled: sheet.derivable && walletPw.text.length > 0 && accountPw.text.length > 0
-            onClicked: logos.watch(
-                sheet.backend.deriveNextAccount(sheet.group.id, walletPw.text, accountPw.text),
-                function (good) { if (good) sheet.close() })
+            onClicked: {
+                sheetError.clear()
+                logos.watch(sheet.backend.deriveNextAccount(sheet.group.id, walletPw.text, accountPw.text),
+                    function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The account was not added.") },
+                    function () { sheetError.lost() })
+            }
         }
 
         Rectangle {
@@ -195,19 +199,27 @@ LogosDialog {
                 objectName: "previewButton"
                 text: "Preview"
                 enabled: sheet.pathValid && !sheet.accountMismatch && walletPw.text.length > 0
-                onClicked: logos.watch(
-                    sheet.backend.previewAddresses(sheet.group.id, walletPw.text, sheet.chg, sheet.idx, 10),
-                    function (json) { sheet.previewRows = sheet.rows(json) })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheet.backend.previewAddresses(sheet.group.id, walletPw.text, sheet.chg, sheet.idx, 10),
+                        function (json) {
+                            sheet.previewRows = sheet.rows(json)
+                            if (!json) sheetError.take(sheet.backend, "Could not preview the addresses.")
+                        }, function () { sheetError.lost() })
+                }
             }
             LogosButton {
                 objectName: "deriveAtConfirm"
                 text: "Add the account at this path"
                 enabled: sheet.pathValid && !sheet.accountMismatch
                          && walletPw.text.length > 0 && accountPw.text.length > 0
-                onClicked: logos.watch(
-                    sheet.backend.deriveAccountAt(sheet.group.id, walletPw.text, accountPw.text,
-                                                  sheet.acct, sheet.chg, sheet.idx),
-                    function (good) { if (good) sheet.close() })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheet.backend.deriveAccountAt(sheet.group.id, walletPw.text, accountPw.text,
+                                                              sheet.acct, sheet.chg, sheet.idx),
+                        function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The account was not added.") },
+                        function () { sheetError.lost() })
+                }
             }
         }
         LogosListView {
@@ -234,6 +246,7 @@ LogosDialog {
             }
         }
 
+        SheetError { id: sheetError; objectName: "addAccountError" }
         LogosButton { objectName: "addAccountClose"; text: "Close"; onClicked: sheet.close() }
     }
 }

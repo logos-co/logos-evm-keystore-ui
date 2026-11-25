@@ -84,12 +84,13 @@ LogosDialog {
     width: Math.min(parent.width - 40, 560)
 
     onOpened: {
+        sheetError.clear()
         forgetAck.checked = false
         nameField.text = sheet.storedName
         credPw.text = ""
         sheet.credAddress = sheet.addresses.length > 0 ? sheet.addresses[0] : ""
     }
-    onClosed: { forgetAck.checked = false; credPw.text = ""; sheet.credAddress = "" }
+    onClosed: { forgetAck.checked = false; credPw.text = ""; sheet.credAddress = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -129,11 +130,14 @@ LogosDialog {
                 text: "Rename"
                 enabled: sheet.group !== null && sheet.view !== null && sheet.view.custodian
                          && (!sheet.needsCredential || credPw.text.length > 0)
-                onClicked: logos.watch(
-                    sheet.backend.setWalletName(sheet.group.id, nameField.text,
-                                                sheet.provedByAccount ? sheet.credAddress : "",
-                                                sheet.needsCredential ? credPw.text : ""),
-                    function (good) { if (good) credPw.text = "" })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheet.backend.setWalletName(sheet.group.id, nameField.text,
+                                                            sheet.provedByAccount ? sheet.credAddress : "",
+                                                            sheet.needsCredential ? credPw.text : ""),
+                        function (good) { if (good) credPw.text = ""; else sheetError.take(sheet.backend, "The name was not saved.") },
+                        function () { sheetError.lost() })
+                }
             }
         }
 
@@ -294,8 +298,12 @@ LogosDialog {
             visible: !sheet.stranded && (sheet.view ? sheet.view.hasKeyOnDisk(sheet.group) : false)
             text: "Stop keeping the derivation key"
             enabled: forgetAck.checked
-            onClicked: logos.watch(sheet.backend.forgetDerivation(sheet.group.id),
-                function (good) { if (good) sheet.close() })
+            onClicked: {
+                sheetError.clear()
+                logos.watch(sheet.backend.forgetDerivation(sheet.group.id),
+                    function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The derivation key is still kept.") },
+                    function () { sheetError.lost() })
+            }
         }
 
         LogosText {
@@ -358,6 +366,7 @@ LogosDialog {
                   + "derivation key is not known here."
         }
 
+        SheetError { id: sheetError; objectName: "manageWalletError" }
         LogosButton { objectName: "manageWalletClose"; text: "Close"; onClicked: sheet.close() }
     }
 }

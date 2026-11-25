@@ -16,8 +16,8 @@ LogosDialog {
     property var kept: null
     property string words: ""
 
-    onOpened: { words = ""; pw.text = "" }
-    onClosed: { words = ""; pw.text = "" }
+    onOpened: { words = ""; pw.text = ""; sheetError.clear() }
+    onClosed: { words = ""; pw.text = ""; sheetError.clear() }
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
@@ -75,13 +75,18 @@ LogosDialog {
             }
         }
 
+        SheetError { id: sheetError; objectName: "phraseError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton {
                 objectName: "phraseForgetButton"
                 text: "Forget phrase"
-                onClicked: logos.watch(sheet.backend.forgetPhrase(sheet.kept.id),
-                                       function (good) { if (good) sheet.close() })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheet.backend.forgetPhrase(sheet.kept.id),
+                                function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The phrase is still kept.") },
+                                function () { sheetError.lost() })
+                }
             }
             Item { Layout.fillWidth: true }
             LogosButton { objectName: "phraseCloseButton"; text: "Close"; onClicked: sheet.close() }
@@ -91,8 +96,12 @@ LogosDialog {
                 enabled: pw.text.length > 0
                 text: "Show"
                 onClicked: {
+                    sheetError.clear()
                     logos.watch(sheet.backend.showPhrase(sheet.kept.id, pw.text),
-                                function (w) { sheet.words = w || "" })
+                                function (w) {
+                                    sheet.words = w || ""
+                                    if (!w) sheetError.take(sheet.backend, "The phrase was not shown.")
+                                }, function () { sheetError.lost() })
                     pw.text = ""
                 }
             }
