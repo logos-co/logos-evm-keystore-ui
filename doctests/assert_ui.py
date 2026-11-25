@@ -465,7 +465,8 @@ check("and the wallet rename carries one of its own accounts, with that account'
 # with none, and one it didn't still proves custody.
 rename = text("RenameAccountSheet.qml")
 check("the field is on the account's rename sheet", 'objectName: "renameAccountPassword"' in code(rename), True)
-check("and shown only after a refusal", "else if (name.length > 0) sheet.askPassword = true" in code(rename), True)
+check("and shown only after a refusal",
+      "if (good) { sheet.close(); return }" in code(rename) and "if (name.length > 0) sheet.askPassword = true" in code(rename), True)
 check("and on the wallet sheet", 'objectName: "walletNamePasswordField"' in code(manage), True)
 # Clearing is exempt on purpose: it can only move the display TOWARD the raw address, and it
 # is the one way to strip a stale name off an account whose password is lost.
@@ -654,6 +655,31 @@ check("an older file's derivation key is a strip, confirmed before it goes",
       'id: "forgetkey"' in treesrc and 'objectName: "forgetKeyConfirm"' in code(view), True)
 check("the file's own name is no longer offered on a wallet's file",
       "walletSheet.seedLinked = false" in code(view), True)
+
+print("0t) one backend error, one place: a sheet shows its own, the page only its own")
+# lastError is ONE property for every action and stays set until the next success, so a
+# binding to it anywhere but the page line shows another action's error, or a stale one.
+for f in sorted(QML.glob("*.qml")):
+    if f.name in ("KeystoreView.qml", "SheetError.qml"):
+        continue
+    src = code(f.read_text())
+    check(f"{f.name} never renders the live lastError",
+          re.search(r"text:[^\n]*lastError", src) is None, True)
+    check(f"{f.name}: every logos.watch has an error callback, so a lost call frees the sheet",
+          all(c.count("function") >= 2 for c in re.findall(r"logos\.watch\((?:[^()]|\([^()]*(?:\([^()]*\)[^()]*)*\))*\)", src)
+              if "rejectAccess" not in c), True)
+sheeterr = code(text("SheetError.qml"))
+check("a sheet's error is read when its call answers, never bound", "function take(backend, fallback)" in sheeterr
+      and "text: line.error" in sheeterr, True)
+check("...in words: a leading machine code is dropped",
+      "/^[A-Z][A-Za-z]+:\\s*/" in (QML / "errors.js").read_text(), True)
+check("the page line shows only the page's error", 'text: root.pageError' in code(view), True)
+check("...never while a sheet is up, nor one already on screen",
+      "!ready || sheetUp || root.backend.lastError === errorSeen" in code(view), True)
+popups = sorted(set(re.findall(r"^    \w*(?:Sheet|Dialog) \{\s*id: (\w+)", code(view), re.M)))
+listed = code(view).split("readonly property var sheets:")[1].split("]")[0]
+check(f"...and every popup ({len(popups)}) counts as a sheet",
+      len(popups) >= 18 and [p for p in popups if p not in listed], [])
 
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)
