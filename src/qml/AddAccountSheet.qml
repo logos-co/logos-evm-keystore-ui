@@ -12,7 +12,7 @@ import "tree.js" as Tree
 // funds unrecoverable, dressed as a feature. The title is a literal because LogosDialog renders
 // `title` as AutoText, and the wallet's name is user-typed.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "addAccountSheet"
     title: "Add an account"
 
@@ -63,11 +63,11 @@ LogosDialog {
         LogosText {
             objectName: "addAccountWallet"
             Layout.fillWidth: true
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.subtitleText
-            text: sheet.view ? sheet.view.walletTitleOf(sheet.group) : ""
+            text: sheetRoot.view ? sheetRoot.view.walletTitleOf(sheetRoot.group) : ""
         }
 
         // Reachable when the wallet stops being derivable while this is open — a key deleted
@@ -75,7 +75,7 @@ LogosDialog {
         LogosText {
             objectName: "noDerivableWalletNotice"
             Layout.fillWidth: true
-            visible: !sheet.derivable
+            visible: !sheetRoot.derivable
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "This wallet does not keep a derivation key, so the next account cannot be "
@@ -86,12 +86,12 @@ LogosDialog {
         LogosText {
             objectName: "nextPathLine"
             Layout.fillWidth: true
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
-            text: sheet.derivable
+            text: sheetRoot.derivable
                   ? "The next free account of this wallet is m/44'/60'/"
-                    + sheet.accountOf(sheet.group) + "'/0/" + Tree.nextIndexOf(sheet.group)
+                    + sheetRoot.accountOf(sheetRoot.group) + "'/0/" + Tree.nextIndexOf(sheetRoot.group)
                   : ""
         }
 
@@ -99,7 +99,7 @@ LogosDialog {
             id: walletPw
             objectName: "walletPasswordField"
             Layout.fillWidth: true
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             echoMode: TextInput.Password
             placeholderText: "Wallet password — the one that opens its derivation key"
         }
@@ -107,25 +107,25 @@ LogosDialog {
             id: accountPw
             objectName: "newAccountPasswordField"
             Layout.fillWidth: true
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             echoMode: TextInput.Password
             placeholderText: "Password for the new account"
         }
         LogosButton {
             objectName: "deriveNextConfirm"
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             text: "Add account"
-            enabled: sheet.derivable && walletPw.text.length > 0 && accountPw.text.length > 0
+            enabled: sheetRoot.derivable && walletPw.text.length > 0 && accountPw.text.length > 0
             onClicked: {
                 sheetError.clear()
-                logos.watch(sheet.backend.deriveNextAccount(sheet.group.id, walletPw.text, accountPw.text),
-                    function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The account was not added.") },
+                logos.watch(sheetRoot.backend.deriveNextAccount(sheetRoot.group.id, walletPw.text, accountPw.text),
+                    function (good) { if (good) sheetRoot.close(); else sheetError.take(sheetRoot.backend, "The account was not added.") },
                     function () { sheetError.lost() })
             }
         }
 
         Rectangle {
-            visible: sheet.derivable
+            visible: sheetRoot.derivable
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Theme.palette.borderSubtle
@@ -133,19 +133,19 @@ LogosDialog {
 
         LogosButton {
             objectName: "advancedToggle"
-            visible: sheet.derivable
-            text: sheet.advanced ? "Hide advanced" : "Advanced"
-            onClicked: sheet.advanced = !sheet.advanced
+            visible: sheetRoot.derivable
+            text: sheetRoot.advanced ? "Hide advanced" : "Advanced"
+            onClicked: sheetRoot.advanced = !sheetRoot.advanced
         }
 
         // ── Choose a path ──────────────────────────────────────────────────────────
         LogosText {
-            visible: sheet.advanced && sheet.derivable
+            visible: sheetRoot.advanced && sheetRoot.derivable
             text: "Choose a path"
             color: Theme.palette.textSecondary
         }
         RowLayout {
-            visible: sheet.advanced && sheet.derivable
+            visible: sheetRoot.advanced && sheetRoot.derivable
             spacing: Theme.spacing.tiny
             LogosText { text: "m / 44' / 60' /"; color: Theme.palette.textSecondary }
             LogosTextField {
@@ -173,51 +173,51 @@ LogosDialog {
         }
         LogosText {
             objectName: "chosenPathLine"
-            visible: sheet.advanced && sheet.derivable
+            visible: sheetRoot.advanced && sheetRoot.derivable
             textFormat: Text.PlainText
-            text: sheet.pathValid
-                  ? "m/44'/60'/" + sheet.acct + "'/" + sheet.chg + "/" + sheet.idx
+            text: sheetRoot.pathValid
+                  ? "m/44'/60'/" + sheetRoot.acct + "'/" + sheetRoot.chg + "/" + sheetRoot.idx
                   : "purpose and coin are fixed; change is 0 or 1"
-            color: sheet.pathValid ? Theme.palette.text : Theme.palette.textSecondary
+            color: sheetRoot.pathValid ? Theme.palette.text : Theme.palette.textSecondary
         }
         LogosText {
             objectName: "accountMismatchNotice"
             Layout.fillWidth: true
-            visible: sheet.advanced && sheet.accountMismatch
+            visible: sheetRoot.advanced && sheetRoot.accountMismatch
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
-            text: sheet.group
-                  ? "This wallet kept the key for account " + sheet.accountOf(sheet.group)
+            text: sheetRoot.group
+                  ? "This wallet kept the key for account " + sheetRoot.accountOf(sheetRoot.group)
                     + "'. That level is hardened, so its key cannot reach account "
-                    + sheet.acct + "' — import the phrase again for that one."
+                    + sheetRoot.acct + "' — import the phrase again for that one."
                   : ""
         }
         RowLayout {
-            visible: sheet.advanced && sheet.derivable
+            visible: sheetRoot.advanced && sheetRoot.derivable
             spacing: Theme.spacing.tiny
             LogosButton {
                 objectName: "previewButton"
                 text: "Preview"
-                enabled: sheet.pathValid && !sheet.accountMismatch && walletPw.text.length > 0
+                enabled: sheetRoot.pathValid && !sheetRoot.accountMismatch && walletPw.text.length > 0
                 onClicked: {
                     sheetError.clear()
-                    logos.watch(sheet.backend.previewAddresses(sheet.group.id, walletPw.text, sheet.chg, sheet.idx, 10),
+                    logos.watch(sheetRoot.backend.previewAddresses(sheetRoot.group.id, walletPw.text, sheetRoot.chg, sheetRoot.idx, 10),
                         function (json) {
-                            sheet.previewRows = sheet.rows(json)
-                            if (!json) sheetError.take(sheet.backend, "Could not preview the addresses.")
+                            sheetRoot.previewRows = sheetRoot.rows(json)
+                            if (!json) sheetError.take(sheetRoot.backend, "Could not preview the addresses.")
                         }, function () { sheetError.lost() })
                 }
             }
             LogosButton {
                 objectName: "deriveAtConfirm"
                 text: "Add the account at this path"
-                enabled: sheet.pathValid && !sheet.accountMismatch
+                enabled: sheetRoot.pathValid && !sheetRoot.accountMismatch
                          && walletPw.text.length > 0 && accountPw.text.length > 0
                 onClicked: {
                     sheetError.clear()
-                    logos.watch(sheet.backend.deriveAccountAt(sheet.group.id, walletPw.text, accountPw.text,
-                                                              sheet.acct, sheet.chg, sheet.idx),
-                        function (good) { if (good) sheet.close(); else sheetError.take(sheet.backend, "The account was not added.") },
+                    logos.watch(sheetRoot.backend.deriveAccountAt(sheetRoot.group.id, walletPw.text, accountPw.text,
+                                                              sheetRoot.acct, sheetRoot.chg, sheetRoot.idx),
+                        function (good) { if (good) sheetRoot.close(); else sheetError.take(sheetRoot.backend, "The account was not added.") },
                         function () { sheetError.lost() })
                 }
             }
@@ -225,9 +225,9 @@ LogosDialog {
         LogosListView {
             objectName: "previewList"
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(sheet.previewRows.length * 22, 160)
-            visible: sheet.advanced && sheet.previewRows.length > 0
-            model: sheet.previewRows
+            Layout.preferredHeight: Math.min(sheetRoot.previewRows.length * 22, 160)
+            visible: sheetRoot.advanced && sheetRoot.previewRows.length > 0
+            model: sheetRoot.previewRows
             delegate: RowLayout {
                 width: ListView.view ? ListView.view.width : 0
                 LogosText {
@@ -235,7 +235,7 @@ LogosDialog {
                     Layout.fillWidth: true
                     textFormat: Text.PlainText
                     font.pixelSize: Theme.typography.secondaryText
-                    text: modelData.index + "   " + sheet.shortAddr(modelData.address)
+                    text: modelData.index + "   " + sheetRoot.shortAddr(modelData.address)
                 }
                 LogosText {
                     textFormat: Text.PlainText
@@ -247,6 +247,6 @@ LogosDialog {
         }
 
         SheetError { id: sheetError; objectName: "addAccountError" }
-        LogosButton { objectName: "addAccountClose"; text: "Close"; onClicked: sheet.close() }
+        LogosButton { objectName: "addAccountClose"; text: "Close"; onClicked: sheetRoot.close() }
     }
 }

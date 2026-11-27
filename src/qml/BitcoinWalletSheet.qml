@@ -8,7 +8,7 @@ import Logos.Theme
 // descriptor is fetched when asked for and held in this sheet only: its xpub reveals the
 // wallet's whole history to whoever reads it.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "bitcoinWalletSheet"
     title: "Bitcoin account"
 
@@ -37,20 +37,20 @@ LogosDialog {
             textFormat: Text.PlainText
             elide: Text.ElideRight
             font.bold: true
-            text: sheet.name
+            text: sheetRoot.name
         }
         LogosText {
             objectName: "btcWalletKind"
             Layout.fillWidth: true
             color: Theme.palette.textSecondary
-            text: !sheet.group ? ""
-                  : (sheet.group.family === "bitcoin_taproot" ? "Taproot" : "Native segwit")
-                    + (sheet.group.chain === "main" ? ", on Bitcoin" : ", on the test networks")
-                    + (sheet.group.usedPassphrase ? ", with a BIP39 passphrase" : "")
+            text: !sheetRoot.group ? ""
+                  : (sheetRoot.group.family === "bitcoin_taproot" ? "Taproot" : "Native segwit")
+                    + (sheetRoot.group.chain === "main" ? ", on Bitcoin" : ", on the test networks")
+                    + (sheetRoot.group.usedPassphrase ? ", with a BIP39 passphrase" : "")
         }
         LogosText {
             objectName: "btcWalletPhrase"
-            visible: !!(sheet.group && sheet.group.phrase)
+            visible: !!(sheetRoot.group && sheetRoot.group.phrase)
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
@@ -66,44 +66,44 @@ LogosDialog {
         }
         LogosButton {
             objectName: "btcShowDescriptor"
-            visible: sheet.external.length === 0
+            visible: sheetRoot.external.length === 0
             text: "Show descriptor"
             onClicked: {
                 sheetError.clear()
-                logos.watch(sheet.backend.walletDescriptors(sheet.group.id), function (json) {
+                logos.watch(sheetRoot.backend.walletDescriptors(sheetRoot.group.id), function (json) {
                     try {
                         const d = JSON.parse(json || "{}")
-                        sheet.external = d.external || ""
-                        sheet.internal = d.internal || ""
+                        sheetRoot.external = d.external || ""
+                        sheetRoot.internal = d.internal || ""
                     } catch (e) {}
-                    if (sheet.external.length === 0) sheetError.take(sheet.backend, "Could not read the descriptor.")
+                    if (sheetRoot.external.length === 0) sheetError.take(sheetRoot.backend, "Could not read the descriptor.")
                 }, function () { sheetError.lost() })
             }
         }
         LogosText {
             objectName: "btcExternalDescriptor"
-            visible: sheet.external.length > 0
+            visible: sheetRoot.external.length > 0
             Layout.fillWidth: true
             textFormat: Text.PlainText
             wrapMode: Text.WrapAnywhere
             font.family: "monospace"
-            text: sheet.external
+            text: sheetRoot.external
         }
         LogosText {
             objectName: "btcInternalDescriptor"
-            visible: sheet.internal.length > 0
+            visible: sheetRoot.internal.length > 0
             Layout.fillWidth: true
             textFormat: Text.PlainText
             wrapMode: Text.WrapAnywhere
             font.family: "monospace"
-            text: sheet.internal
+            text: sheetRoot.internal
         }
 
         SheetError { id: sheetError; objectName: "btcWalletError" }
         RowLayout {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
-            LogosButton { objectName: "btcWalletClose"; text: "Close"; onClicked: sheet.close() }
+            LogosButton { objectName: "btcWalletClose"; text: "Close"; onClicked: sheetRoot.close() }
         }
     }
 }

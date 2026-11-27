@@ -10,7 +10,7 @@ import "errors.js" as Errors
 // checked against the accounts it already holds; a key its password. Nothing else changes: no
 // account is added and no file written again.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "addAgainSheet"
     title: account !== "" ? "Add to the Signer app" : "Add the recovery phrase again"
 
@@ -46,7 +46,7 @@ LogosDialog {
         working = true; notice = ""
         logos.watch(backend.restoreUnlockRoot(JSON.stringify(p)), function (ok) {
             working = false
-            if (ok) { sheet.added(); sheet.close() }
+            if (ok) { sheetRoot.added(); sheetRoot.close() }
             else notice = Errors.human(backend.lastError) || "It was not added. Check the phrase and the password."
         }, function () { working = false; notice = "The Keys app did not answer. Try again." })
         p = {}
@@ -69,13 +69,13 @@ LogosDialog {
             font.bold: true
             textFormat: Text.PlainText
             elide: Text.ElideRight
-            text: sheet.account !== "" ? sheet.account : sheet.walletName
+            text: sheetRoot.account !== "" ? sheetRoot.account : sheetRoot.walletName
         }
         LogosText {
             objectName: "addAgainExplanation"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: sheet.account !== ""
+            text: sheetRoot.account !== ""
                   ? "This key was added before wallets could be locked. Its password adds it to the "
                     + "Signer app; nothing else changes."
                   : "This wallet was added before wallets could be locked. Its recovery phrase is checked "
@@ -85,43 +85,43 @@ LogosDialog {
 
         Accounts.PhraseGrid {
             id: words; objectName: "addAgainWords"; Layout.fillWidth: true
-            visible: sheet.account === "" && !sheet.keptId
+            visible: sheetRoot.account === "" && !sheetRoot.keptId
         }
         LogosTextField {
             id: phrasePw; objectName: "addAgainPhrasePassword"; Layout.fillWidth: true
-            visible: sheet.account === "" && !!sheet.keptId
+            visible: sheetRoot.account === "" && !!sheetRoot.keptId
             echoMode: TextInput.Password; placeholderText: "Recovery source password"
         }
         LogosTextField {
             id: passphrase; objectName: "addAgainPassphrase"; Layout.fillWidth: true
-            visible: sheet.account === "" && sheet.needsPassphrase
+            visible: sheetRoot.account === "" && sheetRoot.needsPassphrase
             echoMode: TextInput.Password; placeholderText: "BIP39 passphrase (exactly as originally used)"
         }
         LogosTextField {
             id: pw; objectName: "addAgainPassword"; Layout.fillWidth: true
             echoMode: TextInput.Password
-            placeholderText: sheet.account !== "" ? "This account's password" : "The password of its account files"
+            placeholderText: sheetRoot.account !== "" ? "This account's password" : "The password of its account files"
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
         LogosText {
             objectName: "addAgainNotice"
             Layout.fillWidth: true
-            visible: sheet.notice.length > 0
+            visible: sheetRoot.notice.length > 0
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.palette.error
-            text: sheet.notice
+            text: sheetRoot.notice
         }
 
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "addAgainCancel"; text: "Cancel"; onClicked: sheet.close() }
+            LogosButton { objectName: "addAgainCancel"; text: "Cancel"; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "addAgainConfirm"
-                text: sheet.account !== "" ? "Add to the Signer app" : "Add the phrase"
-                enabled: !sheet.working && sheet.ready()
-                onClicked: sheet.submit()
+                text: sheetRoot.account !== "" ? "Add to the Signer app" : "Add the phrase"
+                enabled: !sheetRoot.working && sheetRoot.ready()
+                onClicked: sheetRoot.submit()
             }
         }
     }

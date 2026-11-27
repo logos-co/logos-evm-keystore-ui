@@ -8,7 +8,7 @@ import "accountkit/roster.js" as Roster
 // Remove one account: an EVM account's vault, or a Bitcoin account's file. Checked against that
 // account's password, so a wrong one removes nothing. The title is fixed.
 LogosWarningDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "removeAccountSheet"
     title: "Remove account"
     accentColor: Theme.palette.error
@@ -19,15 +19,15 @@ LogosWarningDialog {
     property bool working: false
     property bool tried: false
 
-    readonly property bool bitcoin: !!sheet.entry && sheet.entry.family !== "evm"
+    readonly property bool bitcoin: !!sheetRoot.entry && sheetRoot.entry.family !== "evm"
     // Whether a recovery phrase brings it back: a Bitcoin account, or an EVM one derived from one.
-    readonly property bool fromPhrase: sheet.bitcoin
-        || (!!sheet.entry && !!sheet.view && (sheet.view.provFor(sheet.entry.address) || {}).origin === "derived")
+    readonly property bool fromPhrase: sheetRoot.bitcoin
+        || (!!sheetRoot.entry && !!sheetRoot.view && (sheetRoot.view.provFor(sheetRoot.entry.address) || {}).origin === "derived")
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
 
-    onOpened: { password.text = ""; ack.checked = false; sheet.working = false; sheet.tried = false; sheetError.clear() }
+    onOpened: { password.text = ""; ack.checked = false; sheetRoot.working = false; sheetRoot.tried = false; sheetError.clear() }
     onClosed: { password.text = ""; ack.checked = false; sheetError.clear() }
 
     contentItem: ColumnLayout {
@@ -39,7 +39,7 @@ LogosWarningDialog {
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.subtitleText
-            text: sheet.entry ? Roster.rowTitle(sheet.entry) + (Roster.rowId(sheet.entry) ? " · " + Roster.rowId(sheet.entry) : "") : ""
+            text: sheetRoot.entry ? Roster.rowTitle(sheetRoot.entry) + (Roster.rowId(sheetRoot.entry) ? " · " + Roster.rowId(sheetRoot.entry) : "") : ""
         }
         LogosText {
             objectName: "removeAccountWhere"
@@ -49,23 +49,23 @@ LogosWarningDialog {
             font.family: Theme.typography.mono
             font.pixelSize: Theme.typography.secondaryText
             color: Theme.palette.textSecondary
-            text: !sheet.entry ? "" : sheet.bitcoin ? (sheet.entry.path || "") : (sheet.entry.address || "")
+            text: !sheetRoot.entry ? "" : sheetRoot.bitcoin ? (sheetRoot.entry.path || "") : (sheetRoot.entry.address || "")
         }
         LogosText {
             objectName: "removeAccountProvenance"
             Layout.fillWidth: true
-            visible: !sheet.bitcoin && text.length > 0
+            visible: !sheetRoot.bitcoin && text.length > 0
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            text: (!sheet.bitcoin && sheet.entry && sheet.view) ? sheet.view.originLine(sheet.entry.address) : ""
+            text: (!sheetRoot.bitcoin && sheetRoot.entry && sheetRoot.view) ? sheetRoot.view.originLine(sheetRoot.entry.address) : ""
         }
         LogosText {
             objectName: "removeAccountLost"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: sheet.fromPhrase ? Theme.palette.textSecondary : Theme.palette.warning
-            text: sheet.fromPhrase
+            color: sheetRoot.fromPhrase ? Theme.palette.textSecondary : Theme.palette.warning
+            text: sheetRoot.fromPhrase
                   ? "Its encrypted key file is deleted from this computer. Its recovery phrase brings it back, "
                     + "at the same address."
                   : "No recovery phrase here covers it: unless you exported it, it is gone for good."
@@ -85,24 +85,24 @@ LogosWarningDialog {
         SheetError { id: sheetError; objectName: "removeAccountError" }
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "removeAccountCancel"; text: "Cancel"; onClicked: sheet.close() }
+            LogosButton { objectName: "removeAccountCancel"; text: "Cancel"; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "removeAccountConfirm"
                 text: "Remove"
-                enabled: !sheet.working && sheet.entry !== null && ack.checked && password.text.length > 0
+                enabled: !sheetRoot.working && sheetRoot.entry !== null && ack.checked && password.text.length > 0
                 onClicked: {
-                    sheet.working = true
-                    sheet.tried = true
+                    sheetRoot.working = true
+                    sheetRoot.tried = true
                     sheetError.clear()
-                    var call = sheet.bitcoin ? sheet.backend.deleteBitcoinAccount(sheet.entry.group, password.text)
-                                             : sheet.backend.deleteAccount(sheet.entry.address, password.text)
+                    var call = sheetRoot.bitcoin ? sheetRoot.backend.deleteBitcoinAccount(sheetRoot.entry.group, password.text)
+                                             : sheetRoot.backend.deleteAccount(sheetRoot.entry.address, password.text)
                     logos.watch(call, function (good) {
-                        sheet.working = false
+                        sheetRoot.working = false
                         password.text = ""
-                        if (good) sheet.close()
-                        else sheetError.take(sheet.backend, "Nothing was removed.")
-                    }, function () { sheet.working = false; sheetError.lost() })
+                        if (good) sheetRoot.close()
+                        else sheetError.take(sheetRoot.backend, "Nothing was removed.")
+                    }, function () { sheetRoot.working = false; sheetError.lost() })
                 }
             }
         }

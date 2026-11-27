@@ -9,7 +9,7 @@ import "tree.js" as Tree
 // here. Each file takes the first password given that opens it; the keystore names the ones none
 // opened, and each password asked for after that is asked once. The title is fixed.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "walletPasswordSheet"
     title: "Change the wallet's password"
 
@@ -23,35 +23,35 @@ LogosDialog {
     property bool working: false
     property bool attempted: false
 
-    readonly property bool more: sheet.left.length > 0
+    readonly property bool more: sheetRoot.left.length > 0
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
 
-    function clear() { oldPw.text = ""; newPw.text = ""; repeatPw.text = ""; sheet.tried = [] }
-    onOpened: { clear(); sheet.left = []; sheet.working = false; sheet.attempted = false; sheetError.clear() }
-    onClosed: { clear(); sheet.left = []; sheetError.clear() }
+    function clear() { oldPw.text = ""; newPw.text = ""; repeatPw.text = ""; sheetRoot.tried = [] }
+    onOpened: { clear(); sheetRoot.left = []; sheetRoot.working = false; sheetRoot.attempted = false; sheetError.clear() }
+    onClosed: { clear(); sheetRoot.left = []; sheetError.clear() }
     // Why the button is still off, once something is typed.
     readonly property string hint:
-          !sheet.more && repeatPw.text.length > 0 && repeatPw.text !== newPw.text ? "The two new passwords don't match."
-        : newPw.text.length > 0 && oldPw.text.length === 0 ? (sheet.more ? "Type the password they use." : "Type the current password too.")
+          !sheetRoot.more && repeatPw.text.length > 0 && repeatPw.text !== newPw.text ? "The two new passwords don't match."
+        : newPw.text.length > 0 && oldPw.text.length === 0 ? (sheetRoot.more ? "Type the password they use." : "Type the current password too.")
         : ""
 
     function submit() {
-        var olds = sheet.tried.concat(oldPw.text.length ? [oldPw.text] : [])
-        sheet.working = true
-        sheet.attempted = true
+        var olds = sheetRoot.tried.concat(oldPw.text.length ? [oldPw.text] : [])
+        sheetRoot.working = true
+        sheetRoot.attempted = true
         sheetError.clear()
-        logos.watch(sheet.backend.changeWalletPassword(sheet.seed, JSON.stringify(olds), newPw.text), function (reply) {
-            sheet.working = false
+        logos.watch(sheetRoot.backend.changeWalletPassword(sheetRoot.seed, JSON.stringify(olds), newPw.text), function (reply) {
+            sheetRoot.working = false
             var r = null
             try { r = reply ? JSON.parse(reply) : null } catch (e) {}
-            if (!r) { oldPw.text = ""; sheetError.take(sheet.backend, "The password was not changed."); return }
-            sheet.tried = olds
+            if (!r) { oldPw.text = ""; sheetError.take(sheetRoot.backend, "The password was not changed."); return }
+            sheetRoot.tried = olds
             oldPw.text = ""
-            sheet.left = r.left || []
-            if (sheet.left.length === 0) sheet.close()
-        }, function () { sheet.working = false; sheetError.lost() })
+            sheetRoot.left = r.left || []
+            if (sheetRoot.left.length === 0) sheetRoot.close()
+        }, function () { sheetRoot.working = false; sheetError.lost() })
     }
 
     contentItem: ColumnLayout {
@@ -63,7 +63,7 @@ LogosDialog {
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.subtitleText
-            text: sheet.shownTitle
+            text: sheetRoot.shownTitle
         }
         LogosText {
             Layout.fillWidth: true
@@ -76,7 +76,7 @@ LogosDialog {
             id: newPw
             objectName: "walletNewPassword"
             Layout.fillWidth: true
-            visible: !sheet.more
+            visible: !sheetRoot.more
             echoMode: TextInput.Password
             placeholderText: "New password"
         }
@@ -84,26 +84,26 @@ LogosDialog {
             id: repeatPw
             objectName: "walletRepeatPassword"
             Layout.fillWidth: true
-            visible: !sheet.more
+            visible: !sheetRoot.more
             echoMode: TextInput.Password
             placeholderText: "Confirm the new password"
         }
         LogosText {
             objectName: "walletPasswordLeft"
             Layout.fillWidth: true
-            visible: sheet.more
+            visible: sheetRoot.more
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
             text: "Moved what that password opened. Still under another password: "
-                  + Tree.leftFiles(sheet.left, sheet.view ? sheet.view.groups : []).join(", ") + "."
+                  + Tree.leftFiles(sheetRoot.left, sheetRoot.view ? sheetRoot.view.groups : []).join(", ") + "."
         }
         LogosTextField {
             id: oldPw
             objectName: "walletOldPassword"
             Layout.fillWidth: true
             echoMode: TextInput.Password
-            placeholderText: sheet.more ? "The password they use" : "Current password"
+            placeholderText: sheetRoot.more ? "The password they use" : "Current password"
         }
         LogosText {
             objectName: "walletPasswordHint"
@@ -111,7 +111,7 @@ LogosDialog {
             visible: text.length > 0
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            text: sheet.hint
+            text: sheetRoot.hint
         }
         SheetError { id: sheetError; objectName: "walletPasswordError" }
         RowLayout {
@@ -119,16 +119,16 @@ LogosDialog {
             LogosButton {
                 objectName: "walletPasswordClose"
                 // What moved stays moved: the rest keep their own passwords until asked again.
-                text: sheet.more ? "Leave the rest" : "Cancel"
-                onClicked: sheet.close()
+                text: sheetRoot.more ? "Leave the rest" : "Cancel"
+                onClicked: sheetRoot.close()
             }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "walletPasswordConfirm"
-                text: sheet.more ? "Continue" : "Change password"
-                enabled: !sheet.working && sheet.seed.length > 0 && oldPw.text.length > 0
+                text: sheetRoot.more ? "Continue" : "Change password"
+                enabled: !sheetRoot.working && sheetRoot.seed.length > 0 && oldPw.text.length > 0
                          && newPw.text.length > 0 && newPw.text === repeatPw.text
-                onClicked: sheet.submit()
+                onClicked: sheetRoot.submit()
             }
         }
     }
