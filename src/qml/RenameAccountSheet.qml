@@ -9,7 +9,7 @@ import "accountkit/roster.js" as Roster
 // with no password, which a wallet the Signer app unlocked takes; one the keystore refuses asks
 // for the account's password. Clearing a name asks for nothing. The title is fixed.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "renameAccountSheet"
     title: "Rename account"
 
@@ -20,34 +20,37 @@ LogosDialog {
     property bool working: false
     property bool tried: false
 
-    readonly property bool bitcoin: !!sheet.entry && sheet.entry.family !== "evm"
+    readonly property bool bitcoin: !!sheetRoot.entry && sheetRoot.entry.family !== "evm"
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 520)
 
     onOpened: {
-        nameField.text = sheet.entry ? (sheet.entry.label || "") : ""
+        nameField.text = sheetRoot.entry ? (sheetRoot.entry.label || "") : ""
         password.text = ""
-        sheet.askPassword = false
-        sheet.working = false
-        sheet.tried = false
+        sheetRoot.askPassword = false
+        sheetRoot.working = false
+        sheetRoot.tried = false
+        sheetError.clear()
     }
-    onClosed: password.text = ""
+    onClosed: { password.text = ""; sheetError.clear() }
 
     function save() {
         var name = nameField.text.trim()
-        var pw = sheet.askPassword ? password.text : ""
-        sheet.working = true
-        sheet.tried = true
-        var call = sheet.bitcoin ? sheet.backend.setWalletName(sheet.entry.group, name, "", pw)
-                                 : sheet.backend.setLabel(sheet.entry.address, name, pw)
+        var pw = sheetRoot.askPassword ? password.text : ""
+        sheetRoot.working = true
+        sheetRoot.tried = true
+        sheetError.clear()
+        var call = sheetRoot.bitcoin ? sheetRoot.backend.setWalletName(sheetRoot.entry.group, name, "", pw)
+                                 : sheetRoot.backend.setLabel(sheetRoot.entry.address, name, pw)
         logos.watch(call, function (good) {
-            sheet.working = false
+            sheetRoot.working = false
             password.text = ""
-            if (good) sheet.close()
+            if (good) { sheetRoot.close(); return }
+            sheetError.take(sheetRoot.backend, "The name was not saved.")
             // A wallet not unlocked this session proves custody with the account's password.
-            else if (name.length > 0) sheet.askPassword = true
-        })
+            if (name.length > 0) sheetRoot.askPassword = true
+        }, function () { sheetRoot.working = false; sheetError.lost() })
     }
 
     contentItem: ColumnLayout {
@@ -59,8 +62,8 @@ LogosDialog {
             textFormat: Text.PlainText
             wrapMode: Text.WrapAnywhere
             color: Theme.palette.textSecondary
-            text: !sheet.entry ? ""
-                  : [Roster.familyWord(sheet.entry), Roster.rowId(sheet.entry), sheet.entry.path].filter(Boolean).join(" · ")
+            text: !sheetRoot.entry ? ""
+                  : [Roster.familyWord(sheetRoot.entry), Roster.rowId(sheetRoot.entry), sheetRoot.entry.path].filter(Boolean).join(" · ")
         }
         LogosTextField {
             id: nameField
@@ -79,7 +82,7 @@ LogosDialog {
         LogosText {
             objectName: "renameAccountNeedsPassword"
             Layout.fillWidth: true
-            visible: sheet.askPassword
+            visible: sheetRoot.askPassword
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "This wallet isn't unlocked in the Signer app, so naming one of its accounts asks for "
@@ -89,29 +92,21 @@ LogosDialog {
             id: password
             objectName: "renameAccountPassword"
             Layout.fillWidth: true
-            visible: sheet.askPassword
+            visible: sheetRoot.askPassword
             echoMode: TextInput.Password
             placeholderText: "That account's password"
         }
-        LogosText {
-            objectName: "renameAccountError"
-            Layout.fillWidth: true
-            visible: sheet.tried && !sheet.working && text.length > 0
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "renameAccountError" }
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "renameAccountCancel"; text: "Cancel"; onClicked: sheet.close() }
+            LogosButton { objectName: "renameAccountCancel"; text: "Cancel"; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "saveAccountName"
                 text: "Save"
-                enabled: !sheet.working && sheet.entry !== null
-                         && (!sheet.askPassword || nameField.text.trim().length === 0 || password.text.length > 0)
-                onClicked: sheet.save()
+                enabled: !sheetRoot.working && sheetRoot.entry !== null
+                         && (!sheetRoot.askPassword || nameField.text.trim().length === 0 || password.text.length > 0)
+                onClicked: sheetRoot.save()
             }
         }
     }

@@ -9,7 +9,7 @@ import Logos.Theme
 // the keystore refuses is proved by any one account under it, or by the key of a file that holds
 // no addresses (a Bitcoin account's). The title is fixed: a name is user-typed.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "walletNameSheet"
     title: "Rename wallet"
 
@@ -29,22 +29,22 @@ LogosDialog {
 
     readonly property var proofs: {
         var out = []
-        var nodes = (sheet.bundle && sheet.bundle.nodes) || []
+        var nodes = (sheetRoot.bundle && sheetRoot.bundle.nodes) || []
         for (var i = 0; i < nodes.length; ++i) {
             var n = nodes[i]
-            if (n.kind !== "wallet" || !sheet.view) continue
-            var row = sheet.view.nodeTitle(n)
+            if (n.kind !== "wallet" || !sheetRoot.view) continue
+            var row = sheetRoot.view.nodeTitle(n)
             if (n.addresses.length > 0)
                 n.addresses.forEach(function (a) {
-                    out.push({ group: n.group.id, address: a, label: row + " · " + sheet.view.shortAddr(a) })
+                    out.push({ group: n.group.id, address: a, label: row + " · " + sheetRoot.view.shortAddr(a) })
                 })
-            else if (sheet.view.keptKeyOf(n))
+            else if (sheetRoot.view.keptKeyOf(n))
                 out.push({ group: n.group.id, address: "", label: row })
         }
         return out
     }
     readonly property var proof: proofs.length > proofIndex ? proofs[proofIndex] : null
-    readonly property bool needsPassword: sheet.askProof && nameField.text.trim().length > 0 && proof !== null
+    readonly property bool needsPassword: sheetRoot.askProof && nameField.text.trim().length > 0 && proof !== null
     // What clearing the name brings back; empty from an older keystore module.
     property string defaultName: ""
 
@@ -52,17 +52,18 @@ LogosDialog {
     width: Math.min(parent.width - 40, 560)
 
     onOpened: {
-        var seedId = sheet.bundle && sheet.bundle.nodes.length ? (sheet.bundle.nodes[0].group || {}).seedId : ""
-        var first = sheet.bundle && sheet.bundle.nodes.length ? sheet.bundle.nodes[0].id : ""
-        nameField.text = !sheet.view ? "" : sheet.fileOnly ? sheet.view.walletNameOf(first) : sheet.view.seedNameFor(seedId)
-        sheet.defaultName = !sheet.view || sheet.fileOnly ? "" : sheet.view.seedDefaultNameFor(seedId)
+        var seedId = sheetRoot.bundle && sheetRoot.bundle.nodes.length ? (sheetRoot.bundle.nodes[0].group || {}).seedId : ""
+        var first = sheetRoot.bundle && sheetRoot.bundle.nodes.length ? sheetRoot.bundle.nodes[0].id : ""
+        nameField.text = !sheetRoot.view ? "" : sheetRoot.fileOnly ? sheetRoot.view.walletNameOf(first) : sheetRoot.view.seedNameFor(seedId)
+        sheetRoot.defaultName = !sheetRoot.view || sheetRoot.fileOnly ? "" : sheetRoot.view.seedDefaultNameFor(seedId)
         password.text = ""
-        sheet.askProof = false
-        sheet.proofIndex = 0
-        sheet.working = false
-        sheet.tried = false
+        sheetRoot.askProof = false
+        sheetRoot.proofIndex = 0
+        sheetRoot.working = false
+        sheetError.clear()
+        sheetRoot.tried = false
     }
-    onClosed: password.text = ""
+    onClosed: { password.text = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -73,17 +74,17 @@ LogosDialog {
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.subtitleText
-            text: sheet.shownTitle
+            text: sheetRoot.shownTitle
         }
         LogosText {
             objectName: "seedWalletNameHint"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            text: sheet.fileOnly ? "Clearing it shows the wallet by its position again."
-                  : sheet.defaultName.length > 0
+            text: sheetRoot.fileOnly ? "Clearing it shows the wallet by its position again."
+                  : sheetRoot.defaultName.length > 0
                     ? "Every app shows this name for the wallet. Clearing it gives it back its default name, \u201c"
-                      + sheet.defaultName + "\u201d, in every app."
+                      + sheetRoot.defaultName + "\u201d, in every app."
                     : "Every app shows this name for the wallet. Clearing it shows the wallet by its position again."
         }
         LogosTextField {
@@ -97,7 +98,7 @@ LogosDialog {
         LogosText {
             objectName: "seedWalletProofHint"
             Layout.fillWidth: true
-            visible: sheet.needsPassword
+            visible: sheetRoot.needsPassword
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "This wallet isn't unlocked in the Signer app, so naming it asks for the password of "
@@ -105,56 +106,51 @@ LogosDialog {
         }
         ButtonGroup { id: proofPick }
         Repeater {
-            model: sheet.needsPassword ? sheet.proofs : []
+            model: sheetRoot.needsPassword ? sheetRoot.proofs : []
             delegate: LogosRadioButton {
                 objectName: "seedWalletProof_" + index
                 ButtonGroup.group: proofPick
-                checked: index === sheet.proofIndex
+                checked: index === sheetRoot.proofIndex
                 text: modelData.label
-                onClicked: { sheet.proofIndex = index; password.text = "" }
+                onClicked: { sheetRoot.proofIndex = index; password.text = "" }
             }
         }
         LogosTextField {
             id: password
             objectName: "seedWalletPassword"
             Layout.fillWidth: true
-            visible: sheet.needsPassword
+            visible: sheetRoot.needsPassword
             echoMode: TextInput.Password
             placeholderText: "That account's password"
         }
-        LogosText {
-            objectName: "seedWalletNameError"
-            Layout.fillWidth: true
-            visible: sheet.tried && text.length > 0
-            wrapMode: Text.WordWrap
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "seedWalletNameError" }
 
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "seedWalletNameClose"; text: "Close"; onClicked: sheet.close() }
+            LogosButton { objectName: "seedWalletNameClose"; text: "Close"; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "seedWalletNameConfirm"
                 text: "Rename"
-                enabled: !sheet.working && sheet.bundle !== null && sheet.view !== null && sheet.view.custodian
-                         && (!sheet.needsPassword || password.text.length > 0)
+                enabled: !sheetRoot.working && sheetRoot.bundle !== null && sheetRoot.view !== null && sheetRoot.view.custodian
+                         && (!sheetRoot.needsPassword || password.text.length > 0)
                 onClicked: {
-                    var p = sheet.needsPassword ? sheet.proof : null
+                    var p = sheetRoot.needsPassword ? sheetRoot.proof : null
                     var name = nameField.text.trim()
-                    var group = p ? p.group : sheet.bundle.nodes[0].group.id
-                    sheet.working = true
-                    sheet.tried = true
-                    var call = sheet.fileOnly
-                        ? sheet.backend.setWalletName(group, name, p ? p.address : "", p ? password.text : "")
-                        : sheet.backend.setSeedWalletName(group, name, p ? p.address : "", p ? password.text : "")
+                    var group = p ? p.group : sheetRoot.bundle.nodes[0].group.id
+                    sheetRoot.working = true
+                    sheetRoot.tried = true
+                    sheetError.clear()
+                    var call = sheetRoot.fileOnly
+                        ? sheetRoot.backend.setWalletName(group, name, p ? p.address : "", p ? password.text : "")
+                        : sheetRoot.backend.setSeedWalletName(group, name, p ? p.address : "", p ? password.text : "")
                     logos.watch(call, function (good) {
-                        sheet.working = false
+                        sheetRoot.working = false
                         password.text = ""
-                        if (good) sheet.close()
-                        else if (name.length > 0) sheet.askProof = true
-                    })
+                        if (good) { sheetRoot.close(); return }
+                        sheetError.take(sheetRoot.backend, "The name was not saved.")
+                        if (name.length > 0) sheetRoot.askProof = true
+                    }, function () { sheetRoot.working = false; sheetError.lost() })
                 }
             }
         }

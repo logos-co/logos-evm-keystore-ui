@@ -7,7 +7,7 @@ import Logos.Theme
 // Export one EVM account's vault JSON, with its password. Shown so it can be copied, and
 // dropped when the sheet closes. The title is fixed.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "exportAccountSheet"
     title: "Export account"
 
@@ -18,8 +18,8 @@ LogosDialog {
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
 
-    onOpened: { exported = ""; password.text = "" }
-    onClosed: { exported = ""; password.text = "" }
+    onOpened: { exported = ""; password.text = ""; sheetError.clear() }
+    onClosed: { exported = ""; password.text = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -32,9 +32,9 @@ LogosDialog {
                 Layout.fillWidth: true
                 textFormat: Text.PlainText
                 wrapMode: Text.WrapAnywhere
-                text: sheet.address
+                text: sheetRoot.address
             }
-            LogosCopyButton { objectName: "exportAddressCopy"; value: sheet.address }
+            LogosCopyButton { objectName: "exportAddressCopy"; value: sheetRoot.address }
         }
         LogosText {
             Layout.fillWidth: true
@@ -51,30 +51,38 @@ LogosDialog {
         }
         LogosText {
             objectName: "exportedVault"
-            visible: sheet.exported.length > 0
+            visible: sheetRoot.exported.length > 0
             Layout.fillWidth: true
             textFormat: Text.PlainText
             wrapMode: Text.WrapAnywhere
             font.family: Theme.typography.mono
             font.pixelSize: Theme.typography.secondaryText
-            text: sheet.exported
+            text: sheetRoot.exported
         }
+        SheetError { id: sheetError; objectName: "exportError" }
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "exportClose"; text: "Close"; onClicked: sheet.close() }
+            LogosButton { objectName: "exportClose"; text: "Close"; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosCopyButton {
                 objectName: "exportedVaultCopy"
-                visible: sheet.exported.length > 0
-                value: sheet.exported
+                visible: sheetRoot.exported.length > 0
+                value: sheetRoot.exported
                 Accessible.name: "Copy the vault JSON"
             }
             LogosButton {
                 objectName: "exportConfirm"
                 text: "Export vault JSON"
                 enabled: password.text.length > 0
-                onClicked: logos.watch(sheet.backend.exportVaultJson(sheet.address, password.text),
-                    function (vault) { sheet.exported = vault || ""; password.text = "" })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheetRoot.backend.exportVaultJson(sheetRoot.address, password.text),
+                        function (vault) {
+                            sheetRoot.exported = vault || ""
+                            password.text = ""
+                            if (!vault) sheetError.take(sheetRoot.backend, "Nothing was exported.")
+                        }, function () { sheetError.lost() })
+                }
             }
         }
     }

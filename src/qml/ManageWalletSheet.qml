@@ -14,7 +14,7 @@ import Logos.Theme
 // The title is fixed. LogosDialog renders `title` through a bare LogosText, i.e. AutoText, so
 // a wallet's name — the one user-typed string on this screen — is shown in the body instead.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "manageWalletSheet"
     title: "Manage account file"
 
@@ -43,10 +43,10 @@ LogosDialog {
     // A name with no record and no key left under it. There is no wallet to manage here —
     // only the name, and the row it keeps on screen.
     property bool nameOnly: false
-    readonly property bool keysKnown: sheet.view ? sheet.view.keyDirectoryKnown : true
+    readonly property bool keysKnown: sheetRoot.view ? sheetRoot.view.keyDirectoryKnown : true
     // The wallet holds nothing, and both reads behind that claim answered.
     readonly property bool holdsNothing:
-        sheet.countKnown && sheet.addresses.length === 0 && sheet.keysKnown && !sheet.keptKey
+        sheetRoot.countKnown && sheetRoot.addresses.length === 0 && sheetRoot.keysKnown && !sheetRoot.keptKey
 
     signal removeRequested()
 
@@ -56,20 +56,20 @@ LogosDialog {
     // What the wallet HOLDS prices the name, exactly as the keystore prices it: an account's
     // password where it has accounts, and where it has only a key, that key's — the name will
     // come to stand over whatever it mints. Only a wallet that holds nothing is free.
-    readonly property bool provedByAccount: sheet.addresses.length > 0
-    readonly property bool provedByKey: sheet.addresses.length === 0 && sheet.keptKey
+    readonly property bool provedByAccount: sheetRoot.addresses.length > 0
+    readonly property bool provedByKey: sheetRoot.addresses.length === 0 && sheetRoot.keptKey
     readonly property bool needsCredential:
-        (sheet.provedByAccount || sheet.provedByKey) && nameField.text.trim().length > 0
+        (sheetRoot.provedByAccount || sheetRoot.provedByKey) && nameField.text.trim().length > 0
 
     // Why removing the row is not offered, where it is not. Reached only with the key
     // directory read and no live key on disk, so the cases are: the accounts could not be
     // read, accounts remain, or an interrupted import left a copy of the key.
     readonly property string removeBlockedLine:
-        sheet.removable ? ""
-        : !sheet.countKnown
+        sheetRoot.removable ? ""
+        : !sheetRoot.countKnown
           ? " Whether it holds accounts could not be read, so removing the account file itself is "
             + "not offered here."
-        : sheet.addresses.length > 0
+        : sheetRoot.addresses.length > 0
           ? " Removing the account file itself is offered once it holds no accounts: this record "
             + "is what says where they came from, so delete them first."
         : " An interrupted import left a copy of this account file's derivation key here. "
@@ -84,12 +84,13 @@ LogosDialog {
     width: Math.min(parent.width - 40, 560)
 
     onOpened: {
+        sheetError.clear()
         forgetAck.checked = false
-        nameField.text = sheet.storedName
+        nameField.text = sheetRoot.storedName
         credPw.text = ""
-        sheet.credAddress = sheet.addresses.length > 0 ? sheet.addresses[0] : ""
+        sheetRoot.credAddress = sheetRoot.addresses.length > 0 ? sheetRoot.addresses[0] : ""
     }
-    onClosed: { forgetAck.checked = false; credPw.text = ""; sheet.credAddress = "" }
+    onClosed: { forgetAck.checked = false; credPw.text = ""; sheetRoot.credAddress = ""; sheetError.clear() }
 
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
@@ -100,7 +101,7 @@ LogosDialog {
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.typography.subtitleText
-            text: sheet.rowTitle || (sheet.view ? sheet.view.walletTitleOf(sheet.group) : "")
+            text: sheetRoot.rowTitle || (sheetRoot.view ? sheetRoot.view.walletTitleOf(sheetRoot.group) : "")
         }
         LogosText {
             objectName: "manageWalletPath"
@@ -109,7 +110,7 @@ LogosDialog {
             font.family: Theme.typography.mono
             font.pixelSize: Theme.typography.secondaryText
             color: Theme.palette.textSecondary
-            text: sheet.view ? sheet.view.walletSubtitleOf(sheet.group) : ""
+            text: sheetRoot.view ? sheetRoot.view.walletSubtitleOf(sheetRoot.group) : ""
         }
 
         // Where a name is changed. An unnamed wallet is shown by its position, and a position
@@ -127,13 +128,16 @@ LogosDialog {
             LogosButton {
                 objectName: "walletNameConfirm"
                 text: "Rename"
-                enabled: sheet.group !== null && sheet.view !== null && sheet.view.custodian
-                         && (!sheet.needsCredential || credPw.text.length > 0)
-                onClicked: logos.watch(
-                    sheet.backend.setWalletName(sheet.group.id, nameField.text,
-                                                sheet.provedByAccount ? sheet.credAddress : "",
-                                                sheet.needsCredential ? credPw.text : ""),
-                    function (good) { if (good) credPw.text = "" })
+                enabled: sheetRoot.group !== null && sheetRoot.view !== null && sheetRoot.view.custodian
+                         && (!sheetRoot.needsCredential || credPw.text.length > 0)
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheetRoot.backend.setWalletName(sheetRoot.group.id, nameField.text,
+                                                            sheetRoot.provedByAccount ? sheetRoot.credAddress : "",
+                                                            sheetRoot.needsCredential ? credPw.text : ""),
+                        function (good) { if (good) credPw.text = ""; else sheetError.take(sheetRoot.backend, "The name was not saved.") },
+                        function () { sheetError.lost() })
+                }
             }
         }
 
@@ -145,7 +149,7 @@ LogosDialog {
         LogosText {
             objectName: "walletNameCredentialHint"
             Layout.fillWidth: true
-            visible: sheet.needsCredential && sheet.provedByAccount
+            visible: sheetRoot.needsCredential && sheetRoot.provedByAccount
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "Naming an account file renames what other screens show in place of its accounts' "
@@ -154,7 +158,7 @@ LogosDialog {
         LogosText {
             objectName: "walletNameKeyCredentialHint"
             Layout.fillWidth: true
-            visible: sheet.needsCredential && sheet.provedByKey
+            visible: sheetRoot.needsCredential && sheetRoot.provedByKey
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "This account file has no accounts yet, but it keeps a derivation key that can add "
@@ -164,22 +168,22 @@ LogosDialog {
         Repeater {
             // Rebuilt whenever the block appears, so a pick from a previous open cannot
             // survive as a checked radio the sheet no longer agrees with.
-            model: (sheet.needsCredential && sheet.provedByAccount) ? sheet.addresses : []
+            model: (sheetRoot.needsCredential && sheetRoot.provedByAccount) ? sheetRoot.addresses : []
             delegate: RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spacing.small
                 LogosRadioButton {
                     objectName: "walletCredPick_" + modelData
                     ButtonGroup.group: credPick
-                    checked: modelData === sheet.credAddress
+                    checked: modelData === sheetRoot.credAddress
                     Accessible.name: "Use this account"
-                    onClicked: sheet.credAddress = modelData
+                    onClicked: sheetRoot.credAddress = modelData
                 }
                 LogosText {
                     objectName: "walletCredAddress_" + modelData
                     textFormat: Text.PlainText
                     font.family: Theme.typography.mono
-                    text: sheet.view ? sheet.view.shortAddr(modelData) : ""
+                    text: sheetRoot.view ? sheetRoot.view.shortAddr(modelData) : ""
                 }
             }
         }
@@ -187,16 +191,16 @@ LogosDialog {
             id: credPw
             objectName: "walletNamePasswordField"
             Layout.fillWidth: true
-            visible: sheet.needsCredential
+            visible: sheetRoot.needsCredential
             echoMode: TextInput.Password
-            placeholderText: sheet.provedByKey ? "This account file's derivation key password"
+            placeholderText: sheetRoot.provedByKey ? "This account file's derivation key password"
                                                : "That account's password"
         }
         // Both halves of the rule the keystore actually applies, said where it applies.
         LogosText {
             objectName: "walletNameNoSecret"
             Layout.fillWidth: true
-            visible: sheet.holdsNothing
+            visible: sheetRoot.holdsNothing
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "No password is asked for here. This account file holds nothing — no accounts, and "
@@ -206,10 +210,10 @@ LogosDialog {
         LogosText {
             objectName: "walletNameCountUnread"
             Layout.fillWidth: true
-            visible: (!sheet.countKnown || !sheet.keysKnown) && nameField.text.trim().length > 0
+            visible: (!sheetRoot.countKnown || !sheetRoot.keysKnown) && nameField.text.trim().length > 0
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
-            text: (sheet.countKnown ? "The keys stored on disk could not be read"
+            text: (sheetRoot.countKnown ? "The keys stored on disk could not be read"
                                     : "Which accounts belong to this account file could not be read")
                   + ", so nothing here can tell what naming it has to be proved against. The "
                   + "keystore checks for itself and will say so if a password is needed."
@@ -220,11 +224,11 @@ LogosDialog {
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             // Under a wallet a row is shown by its kind and number, not by its position.
-            text: sheet.seedLinked
-                  ? (sheet.storedName.length === 0
+            text: sheetRoot.seedLinked
+                  ? (sheetRoot.storedName.length === 0
                      ? "A name is shown after its kind and number, as in the list."
                      : "Clearing this field removes the name.")
-                  : sheet.storedName.length === 0
+                  : sheetRoot.storedName.length === 0
                     ? "Unnamed account files are shown by their position in this list, which "
                       + "importing another can change. A name stays where you put it."
                     : "Clearing this field removes the name and shows this account file by its "
@@ -233,7 +237,7 @@ LogosDialog {
         LogosText {
             objectName: "walletNameDuplicate"
             Layout.fillWidth: true
-            visible: sheet.duplicateName && !sheet.seedLinked
+            visible: sheetRoot.duplicateName && !sheetRoot.seedLinked
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
             text: "Another account file here carries this name too. Both are shown with the start "
@@ -243,10 +247,10 @@ LogosDialog {
         LogosText {
             objectName: "strandedHere"
             Layout.fillWidth: true
-            visible: sheet.stranded
+            visible: sheetRoot.stranded
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            text: sheet.recordKnown
+            text: sheetRoot.recordKnown
                   ? "No wallet record here accounts for this derivation key, so there is nothing "
                     + "else to manage. Deleting the key is offered on its own row."
                   : "The wallet list could not be read, so what this derivation key belongs to "
@@ -256,14 +260,14 @@ LogosDialog {
         // A real, cheap reduction in exposure for someone who is done adding accounts —
         // and the only direction this choice can be changed in.
         LogosText {
-            visible: !sheet.stranded && sheet.group !== null && sheet.group.derivable === true
+            visible: !sheetRoot.stranded && sheetRoot.group !== null && sheetRoot.group.derivable === true
             text: "Derivation"
             color: Theme.palette.textSecondary
         }
         LogosText {
             objectName: "forgetDerivationWarning"
             Layout.fillWidth: true
-            visible: !sheet.stranded && (sheet.view ? sheet.view.hasKeyOnDisk(sheet.group) : false)
+            visible: !sheetRoot.stranded && (sheetRoot.view ? sheetRoot.view.hasKeyOnDisk(sheetRoot.group) : false)
             wrapMode: Text.WordWrap
             text: "This account file keeps a derivation key, so accounts can be added without its "
                   + "recovery phrase. Removing it cannot be undone, and it does not need the "
@@ -275,7 +279,7 @@ LogosDialog {
         LogosText {
             objectName: "forgetDerivationStaged"
             Layout.fillWidth: true
-            visible: !sheet.stranded && sheet.group !== null && sheet.group.staged === true
+            visible: !sheetRoot.stranded && sheetRoot.group !== null && sheetRoot.group.staged === true
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
             text: "An interrupted import left a copy of this account file's derivation key here. "
@@ -286,16 +290,20 @@ LogosDialog {
         LogosCheckbox {
             id: forgetAck
             objectName: "forgetDerivationAck"
-            visible: !sheet.stranded && (sheet.view ? sheet.view.hasKeyOnDisk(sheet.group) : false)
+            visible: !sheetRoot.stranded && (sheetRoot.view ? sheetRoot.view.hasKeyOnDisk(sheetRoot.group) : false)
             text: "I understand this cannot be undone"
         }
         LogosButton {
             objectName: "forgetDerivationConfirm"
-            visible: !sheet.stranded && (sheet.view ? sheet.view.hasKeyOnDisk(sheet.group) : false)
+            visible: !sheetRoot.stranded && (sheetRoot.view ? sheetRoot.view.hasKeyOnDisk(sheetRoot.group) : false)
             text: "Stop keeping the derivation key"
             enabled: forgetAck.checked
-            onClicked: logos.watch(sheet.backend.forgetDerivation(sheet.group.id),
-                function (good) { if (good) sheet.close() })
+            onClicked: {
+                sheetError.clear()
+                logos.watch(sheetRoot.backend.forgetDerivation(sheetRoot.group.id),
+                    function (good) { if (good) sheetRoot.close(); else sheetError.take(sheetRoot.backend, "The derivation key is still kept.") },
+                    function () { sheetError.lost() })
+            }
         }
 
         LogosText {
@@ -303,25 +311,25 @@ LogosDialog {
             Layout.fillWidth: true
             // Only when the key directory ANSWERED. A refused read empties it, and "keeps no
             // derivation key" is then the read failing, stated as a fact about the wallet.
-            visible: !sheet.stranded && !sheet.nameOnly && sheet.group !== null && sheet.keysKnown
-                     && !(sheet.view && sheet.view.hasKeyOnDisk(sheet.group))
+            visible: !sheetRoot.stranded && !sheetRoot.nameOnly && sheetRoot.group !== null && sheetRoot.keysKnown
+                     && !(sheetRoot.view && sheetRoot.view.hasKeyOnDisk(sheetRoot.group))
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             // It used to end "there is nothing stored here to remove", which is true about the
             // KEY and useless to someone who wants the row gone. Removing the row is a
             // different thing, and it is offered below or explained here.
-            text: (sheet.phraseKept
+            text: (sheetRoot.phraseKept
                    ? "This account file keeps no derivation key. To add accounts, use Add accounts… "
                      + "on its wallet: the recovery phrase kept here opens with its password, "
                      + "without typing the words."
                    : "This account file keeps no derivation key, so adding an account means "
-                     + "typing its recovery phrase again.") + sheet.removeBlockedLine
+                     + "typing its recovery phrase again.") + sheetRoot.removeBlockedLine
         }
 
         LogosText {
             objectName: "nameOnlyLeftover"
             Layout.fillWidth: true
-            visible: sheet.nameOnly
+            visible: sheetRoot.nameOnly
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "Nothing is stored under this account file but the name itself — no record, no "
@@ -330,11 +338,11 @@ LogosDialog {
         }
 
         // ── Remove the wallet itself ───────────────────────────────────────────────
-        LogosText { visible: sheet.removable; text: "Remove"; color: Theme.palette.error }
+        LogosText { visible: sheetRoot.removable; text: "Remove"; color: Theme.palette.error }
         LogosText {
             objectName: "removeWalletOffer"
             Layout.fillWidth: true
-            visible: sheet.removable
+            visible: sheetRoot.removable
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
             text: "This account file holds nothing: no derivation key, and no accounts. Removing it "
@@ -342,22 +350,23 @@ LogosDialog {
         }
         LogosButton {
             objectName: "removeWalletStart"
-            visible: sheet.removable
+            visible: sheetRoot.removable
             text: "Remove this account file"
-            enabled: sheet.view !== null && sheet.view.custodian
-            onClicked: sheet.removeRequested()
+            enabled: sheetRoot.view !== null && sheetRoot.view.custodian
+            onClicked: sheetRoot.removeRequested()
         }
 
         LogosText {
             objectName: "walletKeysUnread"
             Layout.fillWidth: true
-            visible: !sheet.stranded && sheet.group !== null && !sheet.keysKnown
+            visible: !sheetRoot.stranded && sheetRoot.group !== null && !sheetRoot.keysKnown
             wrapMode: Text.WordWrap
             color: Theme.palette.warning
             text: "The keys stored on disk could not be read, so whether this account file keeps a "
                   + "derivation key is not known here."
         }
 
-        LogosButton { objectName: "manageWalletClose"; text: "Close"; onClicked: sheet.close() }
+        SheetError { id: sheetError; objectName: "manageWalletError" }
+        LogosButton { objectName: "manageWalletClose"; text: "Close"; onClicked: sheetRoot.close() }
     }
 }

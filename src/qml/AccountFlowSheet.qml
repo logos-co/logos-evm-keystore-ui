@@ -4,9 +4,10 @@ import QtQuick.Layouts 1.15
 import Logos.Controls
 import Logos.Theme
 import "accountkit" as Accounts
+import "errors.js" as Errors
 
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "accountFlowSheet"
     title: mode === "request" ? "Add Bitcoin accounts" : mode === "create" ? "Create keystore files" : mode === "extend" ? "Add accounts" : "Import"
     anchors.centerIn: parent
@@ -41,29 +42,43 @@ LogosDialog {
     property int generation: 0
     readonly property int wordCount: [12, 18, 24][wordCountPicker.currentIndex]
     property bool showGenerated: true
+    // A new phrase stays hidden behind its warning until the person chooses to see it, as on Keycard.
+    property bool revealed: false
+    // The backup check, as in the Keycard app: three random positions, typed back.
+    property var confirmPos: []
+    readonly property var seedList: generated ? generated.split(" ") : []
+    function pickConfirm() {
+        var all = []; for (var i = 0; i < seedList.length; ++i) all.push(i)
+        for (var k = all.length - 1; k > 0; --k) { var r = Math.floor(Math.random() * (k + 1)); var t = all[k]; all[k] = all[r]; all[r] = t }
+        confirmPos = all.slice(0, 3).sort(function (a, b) { return a - b })
+        cw0.text = ""; cw1.text = ""; cw2.text = ""
+    }
+    function wordOk(field, n) { return field.text.trim().toLowerCase() === (seedList[confirmPos[n]] || "") }
+    readonly property bool confirmValid: confirmPos.length === 3 && wordOk(cw0, 0) && wordOk(cw1, 1) && wordOk(cw2, 2)
     property var rows: []
     property var selected: []
     // Each selected account's own name, by its row key: kept apart so typing doesn't rebuild the rows.
     property var names: ({})
     property int page: 0
     property string notice: ""
+    readonly property string lostText: "The Keys app did not answer. Try again."
     signal importKey()
     signal importFile()
     signal saved(var groups)
     readonly property string family: coin.currentIndex === 0 ? "evm" : scriptType.currentIndex === 0 ? "bitcoin" : "bitcoin_taproot"
     readonly property string chain: testnet.checked ? "test" : "main"
-    function clearSecrets() { words.text = ""; phrasePw.text = ""; passphrase.text = ""; password.text = ""; repeatPassword.text = ""; confirmWords.text = ""; generated = "" }
+    function clearSecrets() { words.text = ""; phrasePw.text = ""; passphrase.text = ""; password.text = ""; repeatPassword.text = ""; cw0.text = ""; cw1.text = ""; cw2.text = ""; generated = "" }
     function generatePhrase() {
         if (working) return
         var request = ++generation
-        generated = ""; confirmWords.text = ""; rows = []; selected = []; page = 0
+        generated = ""; cw0.text = ""; cw1.text = ""; cw2.text = ""; rows = []; selected = []; page = 0
         showGenerated = true; notice = ""; working = true
         logos.watch(backend.generateMnemonic(wordCount), function(p) {
-            if (request !== generation || !sheet.opened) return
+            if (request !== generation || !sheetRoot.opened) return
             working = false
             generated = p || ""
-            if (!generated) notice = backend.lastError
-        })
+            if (!generated) notice = Errors.human(backend.lastError) || "Could not make a recovery phrase."
+        }, function () { if (request === generation) { working = false; notice = sheetRoot.lostText } })
     }
     function source() {
         var p = { passphrase: hasPassphrase.checked ? passphrase.text : "" }
@@ -87,10 +102,10 @@ LogosDialog {
         p.family = family; p.chain = chain; p.account = Number(evmAccount.text || "0"); p.from = page * 5; p.count = 5
         logos.watch(backend.previewSource(JSON.stringify(p)), function(reply) {
             working = false
-            if (!sheet.opened) return
-            if (!reply) { notice = backend.lastError; return }
+            if (!sheetRoot.opened) return
+            if (!reply) { notice = Errors.human(backend.lastError) || "Could not read the address preview."; return }
             try { rows = JSON.parse(reply); step = 1 } catch (e) { notice = "Could not read the address preview." }
-        })
+        }, function () { working = false; notice = sheetRoot.lostText })
         p = {}
     }
     function refreshPage() { if (step === 1) { page = 0; preview() } }
@@ -110,9 +125,9 @@ LogosDialog {
             if (r.keptPhrase && !keptId) { keptId = r.keptPhrase; phrasePw.text = password.text; words.text = ""; generated = "" }
             password.text = ""; repeatPassword.text = ""
             // Every account saved: what went wrong after that, such as a name, stays in the view.
-            if (selected.length === 0) { sheet.saved(r.groups || []); sheet.close() }
-            else notice = (done.length ? "Saved " + done.length + " account(s). Remaining accounts were not saved. " : "") + (r.error || "Check the file list before retrying.")
-        })
+            if (selected.length === 0) { sheetRoot.saved(r.groups || []); sheetRoot.close() }
+            else notice = (done.length ? "Saved " + done.length + " account(s). Remaining accounts were not saved. " : "") + (Errors.human(r.error) || "Check the file list before retrying.")
+        }, function () { working = false; notice = sheetRoot.lostText })
         p = {}
     }
     onOpened: {
@@ -120,23 +135,35 @@ LogosDialog {
         step = mode === "import" || mode === "request" ? -1 : 0
         coin.currentIndex = presetFamily ? 1 : 0; scriptType.currentIndex = presetFamily === "bitcoin_taproot" ? 1 : 0; testnet.checked = presetChain === "test"
         evmAccount.text = "0"; groupName.text = ""; keep.checked = false; advanced.checked = false
-        hasPassphrase.checked = needsPassphrase; showGenerated = true
+        hasPassphrase.checked = needsPassphrase; showGenerated = true; revealed = false
         wordCountPicker.currentIndex = 0
         if (mode === "create") generatePhrase()
     }
     onClosed: { generation++; working = false; clearSecrets(); rows = []; selected = []; names = ({}); sourceGroup = ""; walletSeed = ""; keptId = ""; needsPassphrase = false; notice = ""; requestHandle = ""; presetFamily = ""; presetChain = "" }
     contentItem: ColumnLayout {
         spacing: Theme.spacing.small
-        LogosText {
-            visible: sheet.step >= 0
-            text: sheet.step >= 0 ? ["1 · Recovery source", "2 · Choose accounts", "3 · Save files"][sheet.step] : ""
-            color: Theme.palette.textSecondary
+        // Step header, as in the Keycard app: "Step N of 4", a title and one line, centred.
+        ColumnLayout {
+            visible: sheetRoot.step >= 0
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spacing.small
+            spacing: Theme.spacing.tiny
+            LogosText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: "Step " + (sheetRoot.step + 1) + " of 4"; color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText }
+            LogosText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; text: ["Recovery phrase", "Choose accounts", "Name them", "Set a password"][Math.max(0, sheetRoot.step)]; font.weight: Theme.typography.weightBold; font.pixelSize: Theme.typography.subtitleText }
+            LogosText {
+                Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText
+                text: ["", "Pick the accounts to keep on this computer.", "Optional: names show in every app.",
+                       sheetRoot.joining ? "One password opens every account of a wallet, so the new ones take the one it already uses."
+                                     : "It encrypts the new files. You type it to unlock the wallet."][Math.max(0, sheetRoot.step)]
+                visible: text.length > 0
+            }
         }
         LogosText {
-            objectName: "flowRequestScope"; visible: sheet.requested
+            objectName: "flowRequestScope"; visible: sheetRoot.requested
             Layout.fillWidth: true; wrapMode: Text.WordWrap
-            text: "The app requested " + (sheet.presetFamily === "bitcoin_taproot" ? "Bitcoin Taproot" : "Bitcoin Native SegWit")
-                  + (sheet.presetChain === "main" ? " on Bitcoin mainnet." : " on test networks.")
+            text: "The app requested " + (sheetRoot.presetFamily === "bitcoin_taproot" ? "Bitcoin Taproot" : "Bitcoin Native SegWit")
+                  + (sheetRoot.presetChain === "main" ? " on Bitcoin mainnet." : " on test networks.")
                   + " After saving, review the request before opening the account for the app."
         }
         LogosScrollView {
@@ -147,65 +174,108 @@ LogosDialog {
                 width: flowScroll.availableWidth
                 spacing: Theme.spacing.small
                 ColumnLayout {
-                    visible: sheet.step === -1; Layout.fillWidth: true
+                    visible: sheetRoot.step === -1; Layout.fillWidth: true
                     LogosButton {
-                        objectName: "flowCreatePhrase"; visible: sheet.requested
+                        objectName: "flowCreatePhrase"; visible: sheetRoot.requested
                         text: "Create a recovery phrase"; Layout.fillWidth: true
-                        onClicked: { sheet.mode = "create"; sheet.step = 0; sheet.generatePhrase() }
+                        onClicked: { sheetRoot.mode = "create"; sheetRoot.step = 0; sheetRoot.revealed = false; sheetRoot.generatePhrase() }
                     }
-                    LogosButton { visible: !sheet.requested; text: "Keystore file"; Layout.fillWidth: true; onClicked: { sheet.close(); sheet.importFile() } }
-                    LogosButton { objectName: "flowImportPhrase"; text: "Recovery phrase"; Layout.fillWidth: true; onClicked: { sheet.mode = "import"; sheet.step = 0 } }
+                    LogosButton { visible: !sheetRoot.requested; text: "Keystore file"; Layout.fillWidth: true; onClicked: { sheetRoot.close(); sheetRoot.importFile() } }
+                    LogosButton { objectName: "flowImportPhrase"; text: "Recovery phrase"; Layout.fillWidth: true; onClicked: { sheetRoot.mode = "import"; sheetRoot.step = 0 } }
                     RowLayout {
-                        visible: sheet.requested && sheet.phrases.length > 0
+                        visible: sheetRoot.requested && sheetRoot.phrases.length > 0
                         Layout.fillWidth: true
                         LogosComboBox {
                             id: keptSource; objectName: "flowKeptSource"; Layout.fillWidth: true
-                            model: sheet.phrases.map(function(p) { return p.id })
+                            model: sheetRoot.phrases.map(function(p) { return p.id })
                         }
                         LogosButton {
                             objectName: "flowUseKept"; text: "Use saved recovery source"
                             enabled: keptSource.currentIndex >= 0
-                            onClicked: { sheet.mode = "extend"; sheet.keptId = sheet.phrases[keptSource.currentIndex].id; sheet.walletSeed = sheet.seedOfKept(sheet.keptId); sheet.step = 0 }
+                            onClicked: { sheetRoot.mode = "extend"; sheetRoot.keptId = sheetRoot.phrases[keptSource.currentIndex].id; sheetRoot.walletSeed = sheetRoot.seedOfKept(sheetRoot.keptId); sheetRoot.step = 0 }
                         }
                     }
-                    LogosButton { visible: !sheet.requested; text: "Private key"; Layout.fillWidth: true; onClicked: { sheet.close(); sheet.importKey() } }
+                    LogosButton { visible: !sheetRoot.requested; text: "Private key"; Layout.fillWidth: true; onClicked: { sheetRoot.close(); sheetRoot.importKey() } }
                 }
                 ColumnLayout {
-                    visible: sheet.step === 0; Layout.fillWidth: true
+                    visible: sheetRoot.step === 0; Layout.fillWidth: true
                     LogosText {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap
-                        text: sheet.mode === "create" ? "Write this down. It is the only way to recover the account, it is shown "
+                        visible: !(sheetRoot.mode === "create" && (!sheetRoot.revealed || !sheetRoot.showGenerated))
+                        text: sheetRoot.mode === "create" ? "Write this down. It is the only way to recover the account, it is shown "
                                                         + "once, and anyone who reads it can spend from the account."
-                            : sheet.keptId ? "Open the encrypted recovery source with its password to preview more accounts."
+                            : sheetRoot.keptId ? "Open the encrypted recovery source with its password to preview more accounts."
                             : "Enter your recovery phrase to preview Ethereum and Bitcoin accounts."
                     }
+                    // Before the words: a centred warning and one compact button, as on Keycard.
+                    ColumnLayout {
+                        visible: sheetRoot.mode === "create" && !sheetRoot.revealed
+                        // The sheet's full content width: the column around it sizes to its contents.
+                        Layout.preferredWidth: flowScroll.availableWidth
+                        // Centred vertically in the sheet's body as well.
+                        Layout.topMargin: Math.max(Theme.spacing.xxlarge, (flowScroll.availableHeight - implicitHeight) / 2)
+                        spacing: Theme.spacing.small
+                        LogosText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "Your recovery phrase"
+                            font.weight: Theme.typography.weightBold
+                            font.pixelSize: Theme.typography.subtitleText
+                        }
+                        LogosText {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.maximumWidth: 420
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            color: Theme.palette.textSecondary
+                            text: "Anyone who sees it can take everything in this wallet. Make sure no one is watching "
+                                  + "and nothing is recording your screen, and have paper ready."
+                        }
+                        LogosButton {
+                            objectName: "flowRevealPhrase"
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: Theme.spacing.small
+                            variant: LogosButton.Variant.Primary
+                            text: "Show recovery phrase"
+                            enabled: sheetRoot.generated.length > 0
+                            onClicked: sheetRoot.revealed = true
+                        }
+                        // A failed generation leaves nothing to reveal, and New phrase sits behind the
+                        // reveal: offer the retry here, under the notice that says what went wrong.
+                        LogosButton {
+                            objectName: "flowRetryPhrase"
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: !sheetRoot.working && sheetRoot.generated.length === 0 && sheetRoot.notice.length > 0
+                            text: "Try again"
+                            onClicked: sheetRoot.generatePhrase()
+                        }
+                    }
                     RowLayout {
-                        visible: sheet.mode === "create" && sheet.showGenerated
+                        visible: sheetRoot.mode === "create" && sheetRoot.showGenerated && sheetRoot.revealed
                         Layout.fillWidth: true
                         LogosComboBox {
                             id: wordCountPicker; objectName: "flowWordCount"
                             model: ["12 words", "18 words", "24 words"]
-                            enabled: !sheet.working
+                            enabled: !sheetRoot.working
                             Accessible.name: "Recovery phrase length"
-                            onActivated: sheet.generatePhrase()
+                            onActivated: sheetRoot.generatePhrase()
                         }
                         LogosInfoButton { objectName: "phraseLengthInfo"; title: "Recovery phrase length"; Accessible.name: "Help: Recovery phrase length"; text: "Choose 12, 18 or 24 words before recording the phrase. Longer phrases contain more entropy and take more words to back up. All supported lengths can derive Ethereum and Bitcoin accounts. Changing the length or choosing New phrase replaces the entire phrase and its addresses; write down the final words in numbered order." }
                         Item { Layout.fillWidth: true }
                         LogosButton {
                             objectName: "flowRegenerate"; text: "New phrase"
-                            enabled: !sheet.working
-                            onClicked: sheet.generatePhrase()
+                            enabled: !sheetRoot.working
+                            onClicked: sheetRoot.generatePhrase()
                         }
                     }
                     GridLayout {
                         objectName: "flowGeneratedWords"
-                        visible: sheet.mode === "create" && sheet.showGenerated
+                        visible: sheetRoot.mode === "create" && sheetRoot.showGenerated && sheetRoot.revealed
                         Layout.fillWidth: true
                         columns: width < 380 ? 1 : 2
                         columnSpacing: Theme.spacing.small
                         rowSpacing: Theme.spacing.small
                         Repeater {
-                            model: sheet.mode === "create" && sheet.showGenerated && sheet.generated ? sheet.generated.split(" ") : []
+                            model: sheetRoot.mode === "create" && sheetRoot.showGenerated && sheetRoot.generated ? sheetRoot.generated.split(" ") : []
                             delegate: Frame {
                                 objectName: "flowWord_" + index
                                 Layout.fillWidth: true
@@ -227,25 +297,60 @@ LogosDialog {
                         }
                     }
                     LogosButton {
-                        visible: sheet.mode === "create" && sheet.generated.length > 0
-                        text: sheet.showGenerated ? "I've written it down" : "Show phrase again"
-                        onClicked: sheet.showGenerated = !sheet.showGenerated
+                        visible: sheetRoot.mode === "create" && sheetRoot.generated.length > 0 && sheetRoot.revealed
+                        variant: sheetRoot.showGenerated ? LogosButton.Variant.Primary : LogosButton.Variant.Secondary
+                        text: sheetRoot.showGenerated ? "I've written it down" : "Show phrase again"
+                        onClicked: { if (sheetRoot.showGenerated) sheetRoot.pickConfirm(); sheetRoot.showGenerated = !sheetRoot.showGenerated }
                     }
-                    LogosTextField {
-                        id: confirmWords; objectName: "flowConfirmWords"; Layout.fillWidth: true
-                        visible: sheet.mode === "create" && !sheet.showGenerated
-                        placeholderText: "Confirm words 1, 5 and " + sheet.wordCount
+                    // Confirm the backup: three random words, each checked as it is left.
+                    ColumnLayout {
+                        objectName: "flowConfirmWords"
+                        visible: sheetRoot.mode === "create" && !sheetRoot.showGenerated
+                        Layout.preferredWidth: flowScroll.availableWidth
+                        spacing: Theme.spacing.small
+                        LogosText { Layout.alignment: Qt.AlignHCenter; text: "Confirm your backup"; font.weight: Theme.typography.weightBold; font.pixelSize: Theme.typography.subtitleText }
+                        LogosText { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary; text: "Enter these words from your recovery phrase to confirm you wrote it down." }
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: Theme.spacing.small
+                            LogosText { Layout.preferredWidth: 32; horizontalAlignment: Text.AlignRight; text: "#" + ((sheetRoot.confirmPos[0] || 0) + 1); color: Theme.palette.textSecondary }
+                            ColumnLayout {
+                                spacing: 2
+                                LogosTextField { id: cw0; objectName: "flowConfirmWord0"; Layout.preferredWidth: 220; placeholderText: "type word" }
+                                LogosText { visible: cw0.text.trim().length > 0 && !cw0.textInput.activeFocus && !sheetRoot.wordOk(cw0, 0); text: "That is not word #" + ((sheetRoot.confirmPos[0] || 0) + 1); color: Theme.palette.error; font.pixelSize: Theme.typography.secondaryText }
+                            }
+                        }
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: Theme.spacing.small
+                            LogosText { Layout.preferredWidth: 32; horizontalAlignment: Text.AlignRight; text: "#" + ((sheetRoot.confirmPos[1] || 0) + 1); color: Theme.palette.textSecondary }
+                            ColumnLayout {
+                                spacing: 2
+                                LogosTextField { id: cw1; objectName: "flowConfirmWord1"; Layout.preferredWidth: 220; placeholderText: "type word" }
+                                LogosText { visible: cw1.text.trim().length > 0 && !cw1.textInput.activeFocus && !sheetRoot.wordOk(cw1, 1); text: "That is not word #" + ((sheetRoot.confirmPos[1] || 0) + 1); color: Theme.palette.error; font.pixelSize: Theme.typography.secondaryText }
+                            }
+                        }
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: Theme.spacing.small
+                            LogosText { Layout.preferredWidth: 32; horizontalAlignment: Text.AlignRight; text: "#" + ((sheetRoot.confirmPos[2] || 0) + 1); color: Theme.palette.textSecondary }
+                            ColumnLayout {
+                                spacing: 2
+                                LogosTextField { id: cw2; objectName: "flowConfirmWord2"; Layout.preferredWidth: 220; placeholderText: "type word" }
+                                LogosText { visible: cw2.text.trim().length > 0 && !cw2.textInput.activeFocus && !sheetRoot.wordOk(cw2, 2); text: "That is not word #" + ((sheetRoot.confirmPos[2] || 0) + 1); color: Theme.palette.error; font.pixelSize: Theme.typography.secondaryText }
+                            }
+                        }
                     }
                     Accounts.PhraseGrid {
                         id: words; objectName: "flowWords"; Layout.fillWidth: true
-                        visible: sheet.mode !== "create" && !sheet.keptId
+                        visible: sheetRoot.mode !== "create" && !sheetRoot.keptId
                     }
                     LogosTextField {
                         id: phrasePw; objectName: "flowPhrasePassword"; Layout.fillWidth: true
-                        visible: !!sheet.keptId; echoMode: TextInput.Password; placeholderText: "Recovery source password"
+                        visible: !!sheetRoot.keptId; echoMode: TextInput.Password; placeholderText: "Recovery source password"
                     }
                     RowLayout {
-                        visible: sheet.mode !== "create"
+                        visible: sheetRoot.mode !== "create"
                         LogosCheckbox { id: hasPassphrase; objectName: "flowHasPassphrase"; text: "This recovery phrase has a BIP39 passphrase" }
                         LogosInfoButton { objectName: "bip39PassphraseInfo"; title: "BIP39 passphrase"; Accessible.name: "Help: BIP39 passphrase"; text: "Use this only if the wallet was originally created with an additional BIP39 passphrase. Every different passphrase, including a typo, produces different accounts. It is separate from the password that encrypts your account files and must be backed up separately." }
                     }
@@ -267,11 +372,17 @@ LogosDialog {
                     }
                 }
                 ColumnLayout {
-                    visible: sheet.step === 1; Layout.fillWidth: true
+                    visible: sheetRoot.step === 1; Layout.fillWidth: true
+                    // Account type as radio buttons (design-system controls), as in the Keycard app.
+                    // The choice itself, kept as a value with ComboBox's `currentIndex` / `activated` so callers and
+                    // the doc-tests drive it the same way.
+                    Item { id: coin; objectName: "flowCoin"; visible: false; enabled: !sheetRoot.working && !sheetRoot.requested; property int currentIndex: 0; signal activated(int index); onActivated: sheetRoot.refreshPage() }
                     RowLayout {
-                        Layout.fillWidth: true
-                        ComboBox { id: coin; objectName: "flowCoin"; model: ["Ethereum", "Bitcoin"]; enabled: !sheet.working && !sheet.requested; onActivated: sheet.refreshPage() }
-                        LogosCheckbox { id: testnet; objectName: "flowTestnet"; visible: coin.currentIndex === 1; enabled: !sheet.working && !sheet.requested; text: "Test networks"; onToggled: sheet.refreshPage() }
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: Theme.spacing.large
+                        LogosRadioButton { objectName: "flowCoinEthereum"; text: "Ethereum"; checkable: false; checked: coin.currentIndex === 0; enabled: !sheetRoot.working && !sheetRoot.requested; onClicked: { coin.currentIndex = 0; coin.activated(0) } }
+                        LogosRadioButton { objectName: "flowCoinBitcoin"; text: "Bitcoin"; checkable: false; checked: coin.currentIndex === 1; enabled: !sheetRoot.working && !sheetRoot.requested; onClicked: { coin.currentIndex = 1; coin.activated(1) } }
+                        LogosCheckbox { id: testnet; objectName: "flowTestnet"; visible: coin.currentIndex === 1; enabled: !sheetRoot.working && !sheetRoot.requested; text: "Test networks"; onToggled: sheetRoot.refreshPage() }
                     }
                     RowLayout {
                         LogosCheckbox { id: advanced; text: "Advanced derivation settings" }
@@ -282,120 +393,170 @@ LogosDialog {
                         LogosText { visible: coin.currentIndex === 0; text: "Ethereum account branch" }
                         LogosTextField {
                             id: evmAccount; objectName: "flowEvmBranch"; visible: coin.currentIndex === 0
-                            Layout.fillWidth: true; text: "0"; enabled: !sheet.working
+                            Layout.fillWidth: true; text: "0"; enabled: !sheetRoot.working
                             validator: RegularExpressionValidator { regularExpression: /[0-9]{1,10}/ }
                         }
-                        ComboBox { id: scriptType; objectName: "flowScript"; visible: coin.currentIndex === 1; model: ["Native SegWit (BIP84)", "Taproot (BIP86)"]; enabled: !sheet.working && !sheet.requested; onActivated: sheet.refreshPage() }
-                        LogosButton { text: "Preview"; enabled: !sheet.working; onClicked: sheet.refreshPage() }
+                        Item { id: scriptType; objectName: "flowScript"; visible: false; enabled: !sheetRoot.working && !sheetRoot.requested; property int currentIndex: 0; signal activated(int index); onActivated: sheetRoot.refreshPage() }
+                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Native SegWit"; checkable: false; checked: scriptType.currentIndex === 0; enabled: !sheetRoot.working && !sheetRoot.requested; onClicked: { scriptType.currentIndex = 0; scriptType.activated(0) } }
+                        LogosRadioButton { visible: coin.currentIndex === 1; text: "Taproot"; checkable: false; checked: scriptType.currentIndex === 1; enabled: !sheetRoot.working && !sheetRoot.requested; onClicked: { scriptType.currentIndex = 1; scriptType.activated(1) } }
+                        LogosButton { text: "Preview"; enabled: !sheetRoot.working; onClicked: sheetRoot.refreshPage() }
                     }
                     LogosText {
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
-                        text: coin.currentIndex === 0 ? "Select addresses to save as standard Ethereum keystore files."
-                            : "Each Bitcoin account includes receive and change addresses. The first receiving address is shown."
+                        visible: coin.currentIndex === 1
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText
+                        text: "Each Bitcoin account includes receive and change addresses. The first receiving address is shown."
                     }
+                    // One tappable tile per account, as in the Keycard app's add flow.
                     Repeater {
-                        model: sheet.rows
-                        delegate: Frame {
+                        model: sheetRoot.rows
+                        delegate: Rectangle {
+                            id: tile
+                            required property var modelData
+                            required property int index
+                            readonly property bool canToggle: !sheetRoot.working && !modelData.present && (sheetRoot.chosen(sheetRoot.rowKey(modelData)) || sheetRoot.selected.length < 20)
                             Layout.fillWidth: true
+                            radius: 6
+                            color: modelData.present ? Theme.palette.backgroundMuted
+                                   : rowHover.hovered ? Theme.palette.backgroundTertiary : Theme.palette.background
+                            border.width: 1
+                            border.color: rowHover.hovered ? Theme.palette.border : Theme.palette.borderSubtle
+                            opacity: modelData.present ? 0.6 : 1.0
+                            implicitHeight: rowInner.implicitHeight + 2 * Theme.spacing.small
+                            HoverHandler { id: rowHover; enabled: tile.canToggle }
+                            TapHandler { enabled: tile.canToggle; onTapped: sheetRoot.toggle(modelData, !sheetRoot.chosen(sheetRoot.rowKey(modelData))) }
                             RowLayout {
-                                anchors.fill: parent
+                                id: rowInner
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: Theme.spacing.medium; anchors.rightMargin: Theme.spacing.medium
+                                spacing: Theme.spacing.small
                                 LogosCheckbox {
                                     objectName: "flowSelect_" + index
-                                    checked: sheet.chosen(sheet.rowKey(modelData))
-                                    enabled: !sheet.working && !modelData.present && (checked || sheet.selected.length < 20)
-                                    onToggled: sheet.toggle(modelData, checked)
+                                    enabled: tile.canToggle
+                                    checkable: false
+                                    checked: sheetRoot.chosen(sheetRoot.rowKey(modelData)) || modelData.present
+                                    onClicked: sheetRoot.toggle(modelData, !sheetRoot.chosen(sheetRoot.rowKey(modelData)))
                                 }
                                 ColumnLayout {
-                                    Layout.fillWidth: true
-                                    LogosText { text: (modelData.family === "evm" ? "Ethereum " : "Bitcoin ") + (modelData.index + 1) + (modelData.present ? " · Already saved" : "") }
-                                    LogosText { Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText; text: modelData.address }
-                                    LogosText { visible: advanced.checked; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: Theme.palette.textSecondary; text: modelData.path }
+                                    Layout.fillWidth: true; spacing: 2
+                                    LogosText { text: "Index " + modelData.index + (modelData.present ? "  ·  Already saved" : ""); color: modelData.present ? Theme.palette.textSecondary : Theme.palette.text }
+                                    LogosText { Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText; text: modelData.address; font.pixelSize: Theme.typography.secondaryText }
+                                    LogosText { Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; color: Theme.palette.textTertiary; text: modelData.path; font.pixelSize: Theme.typography.secondaryText }
                                 }
                             }
                         }
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        LogosButton { objectName: "flowPrevious"; text: "Previous"; enabled: !sheet.working && sheet.page > 0; onClicked: { sheet.page--; sheet.preview() } }
-                        LogosText { text: (sheet.page * 5 + 1) + "–" + (sheet.page * 5 + 5) }
-                        LogosButton { objectName: "flowNext"; text: "Next"; enabled: !sheet.working && sheet.page < 429496728; onClicked: { sheet.page++; sheet.preview() } }
+                        LogosButton { objectName: "flowPrevious"; text: "Previous"; enabled: !sheetRoot.working && sheetRoot.page > 0; onClicked: { sheetRoot.page--; sheetRoot.preview() } }
+                        LogosText { text: (sheetRoot.page * 5) + "–" + (sheetRoot.page * 5 + 4); color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText }
                         Item { Layout.fillWidth: true }
+                        LogosText { visible: sheetRoot.selected.length > 0; text: sheetRoot.selected.length + " selected (up to 20)"; color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText }
+                        Item { Layout.fillWidth: true }
+                        LogosButton { objectName: "flowNext"; text: "Next"; enabled: !sheetRoot.working && sheetRoot.page < 429496728; onClicked: { sheetRoot.page++; sheetRoot.preview() } }
                     }
                 }
+                // Step 3: the wallet's name and each account's, one block per account as in Keycard.
                 ColumnLayout {
-                    visible: sheet.step === 2; Layout.fillWidth: true
+                    visible: sheetRoot.step === 2; Layout.fillWidth: true
+                    spacing: Theme.spacing.medium
                     LogosTextField {
                         id: groupName; objectName: "flowName"; Layout.fillWidth: true
-                        visible: !sheet.sourceGroup
+                        visible: !sheetRoot.sourceGroup
                         placeholderText: "Wallet name (optional)"; textInput.maximumLength: 40
                     }
                     Repeater {
-                        model: sheet.selected
-                        delegate: ColumnLayout {
+                        model: sheetRoot.selected
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
                             Layout.fillWidth: true
-                            LogosText {
-                                Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText
-                                text: (modelData.family === "evm" ? "Ethereum keystore JSON" : "Bitcoin account file") + " · " + modelData.path + "\n" + modelData.address
-                            }
-                            LogosTextField {
-                                objectName: "flowAccountName_" + index
-                                Layout.fillWidth: true
-                                placeholderText: "Account name (optional)"; textInput.maximumLength: 40
-                                text: sheet.names[modelData.key] || ""
-                                onTextChanged: sheet.names[modelData.key] = text
+                            radius: 6
+                            color: Theme.palette.background
+                            border.width: 1
+                            border.color: Theme.palette.borderSubtle
+                            implicitHeight: nameInner.implicitHeight + 2 * Theme.spacing.medium
+                            ColumnLayout {
+                                id: nameInner
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.leftMargin: Theme.spacing.medium; anchors.rightMargin: Theme.spacing.medium
+                                spacing: Theme.spacing.small
+                                LogosText {
+                                    Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText
+                                    text: (modelData.family === "evm" ? "Ethereum" : "Bitcoin") + (modelData.chain === "test" ? " · Test" : "") + "  ·  " + modelData.path + "\n" + modelData.address
+                                    color: Theme.palette.textSecondary; font.pixelSize: Theme.typography.secondaryText
+                                }
+                                LogosTextField {
+                                    objectName: "flowAccountName_" + index
+                                    Layout.fillWidth: true
+                                    placeholderText: "Account name (optional)"; textInput.maximumLength: 40
+                                    text: sheetRoot.names[modelData.key] || ""
+                                    onTextChanged: sheetRoot.names[modelData.key] = text
+                                }
                             }
                         }
                     }
-                    LogosTextField { id: password; objectName: "flowPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: sheet.joining ? "The wallet's password" : "Password for the new files" }
-                    LogosTextField { id: repeatPassword; objectName: "flowRepeatPassword"; Layout.fillWidth: true; visible: !sheet.joining; echoMode: TextInput.Password; placeholderText: "Confirm password" }
-                    LogosText {
-                        objectName: "flowWalletPassword"
-                        visible: sheet.joining
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
-                        text: "One password opens every account of a wallet, so the new ones take the one it already uses."
-                    }
-                    RowLayout {
-                        visible: !sheet.keptId
-                        LogosCheckbox { id: keep; objectName: "flowKeepRecovery"; text: "Keep an encrypted recovery source" }
-                        LogosInfoButton { objectName: "recoverySourceInfo"; title: "Keeping a recovery source"; Accessible.name: "Help: Keeping a recovery source"; text: "Account files hold only the keys needed for the selected accounts. The optional recovery source is a separate encrypted file that can derive more accounts from the same phrase. It uses the new files password when saved. Keep your own recovery backup even if you enable this option; a BIP39 passphrase is not saved here." }
-                    }
-                    LogosText {
-                        Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.palette.textSecondary
-                        text: sheet.keptId ? "The existing encrypted recovery source will be reused. Its password stays unchanged."
-                            : keep.checked ? "Saved separately with the same password. Open it with that password later to add accounts."
-                            : "Only the selected account keys are saved. Enter your recovery phrase again to add more accounts."
+                }
+                // Step 4: the password, on its own, centred.
+                ColumnLayout {
+                    visible: sheetRoot.step === 3
+                    Layout.preferredWidth: flowScroll.availableWidth
+                    Layout.topMargin: Theme.spacing.large
+                    spacing: Theme.spacing.small
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Math.min(flowScroll.availableWidth, 340)
+                        spacing: Theme.spacing.small
+                        LogosTextField { id: password; objectName: "flowPassword"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: sheetRoot.joining ? "The wallet's password" : "Password"
+                                         Component.onCompleted: textInput.passwordMaskDelay = 0 }
+                        LogosTextField { id: repeatPassword; objectName: "flowRepeatPassword"; Layout.fillWidth: true; visible: !sheetRoot.joining; echoMode: TextInput.Password; placeholderText: "Password again"
+                                         Component.onCompleted: textInput.passwordMaskDelay = 0 }
+                        LogosText {
+                            visible: !sheetRoot.joining && repeatPassword.text.length > 0 && password.text !== repeatPassword.text
+                            text: "The passwords don't match."; color: Theme.palette.error; font.pixelSize: Theme.typography.secondaryText
+                        }
+                        RowLayout {
+                            visible: !sheetRoot.keptId
+                            Layout.topMargin: Theme.spacing.small
+                            LogosCheckbox { id: keep; objectName: "flowKeepRecovery"; text: "Keep an encrypted recovery source" }
+                            LogosInfoButton { objectName: "recoverySourceInfo"; title: "Keeping a recovery source"; Accessible.name: "Help: Keeping a recovery source"; text: "Account files hold only the keys needed for the selected accounts. The optional recovery source is a separate encrypted file, under this same password, that can derive more accounts from the phrase later. Without it, you type the recovery phrase again to add accounts. Keep your own written backup either way; a BIP39 passphrase is not saved here." }
+                        }
                     }
                 }
                 LogosText {
-                    objectName: "flowNotice"; visible: sheet.notice.length > 0
+                    objectName: "flowNotice"; visible: sheetRoot.notice.length > 0
                     Layout.fillWidth: true; wrapMode: Text.WordWrap; textFormat: Text.PlainText
-                    color: Theme.palette.error; text: sheet.notice
+                    color: Theme.palette.error; text: sheetRoot.notice
                 }
             }
         }
-        LogosText { visible: sheet.step === 1; text: sheet.selected.length + " selected across account types (up to 20)" }
         RowLayout {
             Layout.fillWidth: true
-            LogosButton { objectName: "flowCancel"; text: "Cancel"; enabled: !sheet.working; onClicked: sheet.close() }
+            // Left: Cancel on every step (the dialog has no close button on desktop), Back beside it after the first.
+            LogosButton { objectName: "flowCancel"; text: "Cancel"; enabled: !sheetRoot.working; onClicked: sheetRoot.close() }
             LogosButton {
-                objectName: "flowBack"; text: "Back"; visible: sheet.step > 0 || (sheet.requested && sheet.step === 0); enabled: !sheet.working
-                onClicked: { if (sheet.step === 0) { sheet.clearSecrets(); sheet.keptId = ""; sheet.walletSeed = ""; hasPassphrase.checked = false; sheet.mode = "request" }; sheet.step--; sheet.notice = ""; if (sheet.step === 0) { sheet.rows = []; sheet.selected = [] } }
+                objectName: "flowBack"; text: "Back"; visible: sheetRoot.step > 0 || (sheetRoot.requested && sheetRoot.step === 0); enabled: !sheetRoot.working
+                onClicked: { if (sheetRoot.step === 0) { sheetRoot.clearSecrets(); sheetRoot.keptId = ""; sheetRoot.walletSeed = ""; hasPassphrase.checked = false; sheetRoot.mode = "request" }; sheetRoot.step--; sheetRoot.notice = ""; if (sheetRoot.step === 0) { sheetRoot.rows = []; sheetRoot.selected = [] } }
             }
             Item { Layout.fillWidth: true }
             LogosButton {
-                objectName: "flowContinue"; visible: sheet.step === 0
-                text: sheet.working ? "Loading…" : "Choose accounts"
-                enabled: !sheet.working && (sheet.keptId ? phrasePw.text.length > 0
-                    : sheet.mode !== "create" ? words.text.trim().length > 0
-                    : !sheet.showGenerated && sheet.generated.length > 0 && confirmWords.text.trim().toLowerCase().split(/\s+/).join(" ") === [sheet.generated.split(" ")[0], sheet.generated.split(" ")[4], sheet.generated.split(" ")[sheet.wordCount - 1]].join(" "))
-                onClicked: sheet.preview()
+                objectName: "flowContinue"; visible: sheetRoot.step === 0
+                variant: LogosButton.Variant.Primary
+                text: sheetRoot.working ? "Loading…" : "Continue"
+                enabled: !sheetRoot.working && (sheetRoot.keptId ? phrasePw.text.length > 0
+                    : sheetRoot.mode !== "create" ? words.text.trim().length > 0
+                    : !sheetRoot.showGenerated && sheetRoot.confirmValid)
+                onClicked: sheetRoot.preview()
             }
-            LogosButton { objectName: "flowReview"; visible: sheet.step === 1; text: "Continue"; enabled: !sheet.working && sheet.selected.length > 0; onClicked: sheet.step = 2 }
+            LogosButton { objectName: "flowReview"; visible: sheetRoot.step === 1; variant: LogosButton.Variant.Primary; text: "Continue"; enabled: !sheetRoot.working && sheetRoot.selected.length > 0; onClicked: sheetRoot.step = 2 }
+            LogosButton { objectName: "flowToPassword"; visible: sheetRoot.step === 2; variant: LogosButton.Variant.Primary; text: "Continue"; enabled: !sheetRoot.working; onClicked: sheetRoot.step = 3 }
             LogosButton {
-                objectName: "flowSave"; visible: sheet.step === 2; text: sheet.working ? "Saving…" : "Save " + sheet.selected.length + " account(s)"
-                enabled: !sheet.working && sheet.selected.length > 0 && password.text.length > 0
-                         && (sheet.joining || password.text === repeatPassword.text)
-                onClicked: sheet.saveSelection()
+                objectName: "flowSave"; visible: sheetRoot.step === 3; variant: LogosButton.Variant.Primary
+                text: sheetRoot.working ? "Saving…" : "Add " + sheetRoot.selected.length + (sheetRoot.selected.length === 1 ? " account" : " accounts")
+                enabled: !sheetRoot.working && sheetRoot.selected.length > 0 && password.text.length > 0
+                         && (sheetRoot.joining || password.text === repeatPassword.text)
+                onClicked: sheetRoot.saveSelection()
             }
         }
     }

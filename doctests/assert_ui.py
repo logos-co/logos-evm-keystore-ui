@@ -362,7 +362,7 @@ check("the ordinal comes from the wallet frames", "function walletFrameIds" in
 check("renaming is offered", "setWalletName" in rep and "setWalletName" in backend, True)
 check("where the wallet is managed", 'objectName: "walletNameConfirm"' in manage, True)
 check("prefilled with the stored name, not the ordinal standing in for it",
-      "nameField.text = sheet.storedName" in manage, True)
+      "nameField.text = sheetRoot.storedName" in manage, True)
 check("and the sentence saying it could not be renamed is gone",
       "walletRenameUnavailable" in ALL or "no way to change one" in ALL, False)
 check("the default is explained where it can be changed",
@@ -401,7 +401,7 @@ print("0j) three more absences that were only refusals")
 check("an unread wallet list is not a wallet that is not listed",
       code(view).count("a wallet the list could not be read to name"), 2)
 check("a wallet keeps no derivation key only where the key directory was read",
-      "sheet.keysKnown" in block(text("ManageWalletSheet.qml"),
+      "sheetRoot.keysKnown" in block(text("ManageWalletSheet.qml"),
                                  'objectName: "walletNothingToManage"', 8), True)
 check("and it says so where the claim would have been",
       'objectName: "walletKeysUnread"' in text("ManageWalletSheet.qml"), True)
@@ -465,23 +465,24 @@ check("and the wallet rename carries one of its own accounts, with that account'
 # with none, and one it didn't still proves custody.
 rename = text("RenameAccountSheet.qml")
 check("the field is on the account's rename sheet", 'objectName: "renameAccountPassword"' in code(rename), True)
-check("and shown only after a refusal", "else if (name.length > 0) sheet.askPassword = true" in code(rename), True)
+check("and shown only after a refusal",
+      "if (good) { sheetRoot.close(); return }" in code(rename) and "if (name.length > 0) sheetRoot.askPassword = true" in code(rename), True)
 check("and on the wallet sheet", 'objectName: "walletNamePasswordField"' in code(manage), True)
 # Clearing is exempt on purpose: it can only move the display TOWARD the raw address, and it
 # is the one way to strip a stale name off an account whose password is lost.
 check("clearing an account name still asks for nothing",
       "nameField.text.trim().length === 0 || password.text.length > 0" in code(rename), True)
 check("and the wallet rename asks only where there is something to prove",
-      "!sheet.needsCredential || credPw.text.length > 0" in code(manage), True)
+      "!sheetRoot.needsCredential || credPw.text.length > 0" in code(manage), True)
 # "Has no accounts" was read as "holds nothing", so a DERIVABLE wallet with none could be
 # named by proving nothing — and the account it then derived was shown under that name.
 check("which is whether the wallet HOLDS anything, not whether it has accounts today",
-      "(sheet.provedByAccount || sheet.provedByKey) && nameField.text.trim().length > 0"
+      "(sheetRoot.provedByAccount || sheetRoot.provedByKey) && nameField.text.trim().length > 0"
       in code(manage), True)
 check("an account proves it where there are accounts",
-      "readonly property bool provedByAccount: sheet.addresses.length > 0" in code(manage), True)
+      "readonly property bool provedByAccount: sheetRoot.addresses.length > 0" in code(manage), True)
 check("and the derivation key where there are none but a key is kept",
-      "readonly property bool provedByKey: sheet.addresses.length === 0 && sheet.keptKey"
+      "readonly property bool provedByKey: sheetRoot.addresses.length === 0 && sheetRoot.keptKey"
       in code(manage), True)
 check("that key is looked for at BOTH paths, as removal looks for it",
       "function keptKeyOf" in code(view)
@@ -490,19 +491,19 @@ check("that key is looked for at BOTH paths, as removal looks for it",
 check("and the sheet is told, rather than guessing",
       "walletSheet.keptKey = root.keptKeyOf(modelData)" in code(view), True)
 check("any of them will do, and the first is offered without a step to take",
-      "sheet.addresses.length > 0 ? sheet.addresses[0]" in code(manage), True)
+      "sheetRoot.addresses.length > 0 ? sheetRoot.addresses[0]" in code(manage), True)
 check("the address is sent only where an ACCOUNT is the proof",
-      "sheet.provedByAccount ? sheet.credAddress" in code(manage), True)
+      "sheetRoot.provedByAccount ? sheetRoot.credAddress" in code(manage), True)
 check("and the password reaches the module without one",
       "if (!password.isEmpty())" in backend, True)
 # The shape with no secret is said outright rather than left as a silent exemption.
 check("a wallet that holds nothing says why it is not asked for one",
       'objectName: "walletNameNoSecret"' in code(manage), True)
 check("'holds nothing' is one predicate, over all four facts",
-      "readonly property bool holdsNothing:\n        sheet.countKnown && sheet.addresses.length "
-      "=== 0 && sheet.keysKnown && !sheet.keptKey" in code(manage), True)
+      "readonly property bool holdsNothing:\n        sheetRoot.countKnown && sheetRoot.addresses.length "
+      "=== 0 && sheetRoot.keysKnown && !sheetRoot.keptKey" in code(manage), True)
 check("and the sentence is shown on exactly that",
-      "visible: sheet.holdsNothing"
+      "visible: sheetRoot.holdsNothing"
       in block(code(manage), 'objectName: "walletNameNoSecret"', 4), True)
 # It used to assert the false half aloud: "a wallet that keeps no derivation key can never
 # gain an account, so that stays true" — said over a wallet that kept one.
@@ -554,7 +555,7 @@ check("its sheet is reachable", 'modelData.kind === "nameOnly"'
 check("and removal is offered on it", 'n.kind === "nameOnly"'
       in block(code(view), "function walletRemovable", 7), True)
 check("the sheet does not offer to manage a wallet that is not there",
-      "!sheet.nameOnly" in block(code(manage), 'objectName: "walletNothingToManage"', 8), True)
+      "!sheetRoot.nameOnly" in block(code(manage), 'objectName: "walletNothingToManage"', 8), True)
 check("it says what is left instead", 'objectName: "nameOnlyLeftover"' in code(manage), True)
 
 print("0p) an older build's wallet says what it needs, and offers it")
@@ -583,7 +584,7 @@ check("the view no longer takes the Signer's request for one", "keystore.account
 check("...nor says it does", "keystore.accounts.unlock" in (SRC.parent / "metadata.json").read_text(), False)
 check("the backend can't grant or end one", [n for n in ("unlockAccount", "lockAccount", "unlockedJson") if n in rep], [])
 check("an app's request for one can only be rejected",
-      "visible: sheet.isOpen" in block(code(access), 'objectName: "accessApproveButton"', 2), True)
+      "visible: sheetRoot.isOpen" in block(code(access), 'objectName: "accessApproveButton"', 2), True)
 check("...and says why", 'objectName: "accessNoPasswordless"' in code(access), True)
 check("an open approves the open alone", "approveAccess(QString handle, QString bundleId, QString group, "
       "QString password)" in rep, True)
@@ -614,7 +615,7 @@ check("its rows, strips and ID are decided in tree.js",
       all(f in code(view) for f in ("Tree.cardEntries(", "Tree.cardStrips(", "Tree.cardFingerprint(")), True)
 check("Rename… and Remove… on every row, Export… or Descriptor… beside them",
       all(f in code(view) for f in ('id: "rename", label: "Rename…"', 'id: "remove", label: "Remove…"',
-                                    'id: "export", label: "Export…"', 'id: "descriptor", label: "Descriptor…"')), True)
+                                    'id: "export", label: "Export keystore file…"', 'id: "descriptor", label: "Descriptor…"')), True)
 check("and the per-account Manage sheet is gone", "manageSheet" in code(view), False)
 check("Change password… is the wallet's, not an account's",
       'id: "password", label: "Change password…"' in code(view)
@@ -623,12 +624,12 @@ check("Add accounts…, Rename…, Change password… and Remove wallet… sit t
       "actions: root.walletActions(seedBranch.bundle)" in code(view)
       and "leftActions:" not in code(view) and "rightActions:" not in code(view), True)
 check("each password the keystore left is asked once, then the call again",
-      "sheet.tried.concat(" in code(text("WalletPasswordSheet.qml")), True)
+      "sheetRoot.tried.concat(" in code(text("WalletPasswordSheet.qml")), True)
 check("Add accounts takes the wallet's password, checked before anything is written",
       "if (joining) p.wallet = walletSeed" in code(text("AccountFlowSheet.qml"))
       and "keystore_module.opens_wallet(" in backend, True)
 check("an app's request that reuses a kept phrase joins that phrase's wallet too",
-      "sheet.walletSeed = sheet.seedOfKept(sheet.keptId)" in code(text("AccountFlowSheet.qml"))
+      "sheetRoot.walletSeed = sheetRoot.seedOfKept(sheetRoot.keptId)" in code(text("AccountFlowSheet.qml"))
       and "fileGroups: root.groups" in code(view), True)
 check("an EVM account named while being added gets its address's label, which the card shows",
       "keystore_module.set_label(" in block(backend, "QString EvmKeystoreUiBackend::saveAccounts(", 96)
@@ -654,6 +655,31 @@ check("an older file's derivation key is a strip, confirmed before it goes",
       'id: "forgetkey"' in treesrc and 'objectName: "forgetKeyConfirm"' in code(view), True)
 check("the file's own name is no longer offered on a wallet's file",
       "walletSheet.seedLinked = false" in code(view), True)
+
+print("0t) one backend error, one place: a sheet shows its own, the page only its own")
+# lastError is ONE property for every action and stays set until the next success, so a
+# binding to it anywhere but the page line shows another action's error, or a stale one.
+for f in sorted(QML.glob("*.qml")):
+    if f.name in ("KeystoreView.qml", "SheetError.qml"):
+        continue
+    src = code(f.read_text())
+    check(f"{f.name} never renders the live lastError",
+          re.search(r"text:[^\n]*lastError", src) is None, True)
+    check(f"{f.name}: every logos.watch has an error callback, so a lost call frees the sheet",
+          all(c.count("function") >= 2 for c in re.findall(r"logos\.watch\((?:[^()]|\([^()]*(?:\([^()]*\)[^()]*)*\))*\)", src)
+              if "rejectAccess" not in c), True)
+sheeterr = code(text("SheetError.qml"))
+check("a sheet's error is read when its call answers, never bound", "function take(backend, fallback)" in sheeterr
+      and "text: line.error" in sheeterr, True)
+check("...in words: a leading machine code is dropped",
+      "/^[A-Z][A-Za-z]+:\\s*/" in (QML / "errors.js").read_text(), True)
+check("the page line shows only the page's error", 'text: root.pageError' in code(view), True)
+check("...never while a sheet is up, nor one already on screen",
+      "!ready || sheetUp || root.backend.lastError === errorSeen" in code(view), True)
+popups = sorted(set(re.findall(r"^    \w*(?:Sheet|Dialog) \{\s*id: (\w+)", code(view), re.M)))
+listed = code(view).split("readonly property var sheets:")[1].split("]")[0]
+check(f"...and every popup ({len(popups)}) counts as a sheet",
+      len(popups) >= 18 and [p for p in popups if p not in listed], [])
 
 print("0g) tree.js decides nothing about appearance, so the table asserts claims not colours")
 check("no Theme in tree.js", "Theme" in code((QML / "tree.js").read_text()), False)
@@ -753,7 +779,11 @@ print("5) Add accounts sits on the wallet it adds to")
 check("no global add button", oid("addAccountButton") is None, True)
 if cards:
     c = cards[0]["i"]
-    if oid(f"wallet{c}_Action_add") is not None:
+    # The card's own full-width button (WalletCard's `primaryAdd`). A missing one is a failure,
+    # not a skip: this section is the only one that says where Add accounts lives.
+    add = props(f"wallet{c}_Action_add")
+    check("the card has its Add accounts button", bool(add.get("visible")), True)
+    if add.get("visible"):
         click(f"wallet{c}_Action_add")
         check("the account wizard opened", props("accountFlowSheet").get("opened"), True)
         click("flowCancel")

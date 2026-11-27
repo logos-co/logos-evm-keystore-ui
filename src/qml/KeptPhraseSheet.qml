@@ -7,7 +7,7 @@ import Logos.Theme
 // A kept recovery phrase: shown again with its own password, behind the warning, or forgotten.
 // The words are held in this sheet only, and cleared on close.
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "keptPhraseSheet"
     title: "Kept recovery phrase"
 
@@ -16,8 +16,8 @@ LogosDialog {
     property var kept: null
     property string words: ""
 
-    onOpened: { words = ""; pw.text = "" }
-    onClosed: { words = ""; pw.text = "" }
+    onOpened: { words = ""; pw.text = ""; sheetError.clear() }
+    onClosed: { words = ""; pw.text = ""; sheetError.clear() }
 
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 560)
@@ -29,54 +29,79 @@ LogosDialog {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             color: Theme.palette.textSecondary
-            text: !sheet.kept ? ""
-                  : (sheet.kept.groups || []).length === 0
+            text: !sheetRoot.kept ? ""
+                  : (sheetRoot.kept.groups || []).length === 0
                     ? "No account file here was made from it any more. It is still kept until you forget it."
-                    : "Used by " + sheet.kept.groups.length + " account file(s) here."
+                    : "Used by " + sheetRoot.kept.groups.length + " account file(s) here."
         }
         LogosText {
             objectName: "phraseShowRisk"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            color: Theme.palette.warning
+            color: Theme.palette.textSecondary
             text: "Anyone who sees it owns every account it makes. Check that no camera or person can see your screen."
         }
         LogosTextField {
             id: pw
             objectName: "phrasePasswordField"
-            visible: sheet.words.length === 0
+            visible: sheetRoot.words.length === 0
             Layout.fillWidth: true
             echoMode: TextInput.Password
             placeholderText: "The kept phrase's password"
             Component.onCompleted: textInput.passwordMaskDelay = 0
         }
-        LogosText {
+        // The words as a numbered table, the same one Create shows them in.
+        GridLayout {
             objectName: "phraseWords"
-            visible: sheet.words.length > 0
+            visible: sheetRoot.words.length > 0
             Layout.fillWidth: true
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            text: sheet.words
+            columns: width < 380 ? 1 : 2
+            columnSpacing: Theme.spacing.small
+            rowSpacing: Theme.spacing.small
+            Repeater {
+                model: sheetRoot.words ? sheetRoot.words.split(" ") : []
+                delegate: Frame {
+                    required property string modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    padding: 6
+                    background: Rectangle { radius: 6; color: Theme.palette.backgroundMuted }
+                    contentItem: RowLayout {
+                        spacing: Theme.spacing.small
+                        LogosText { text: (index + 1) + "."; Layout.preferredWidth: 26; color: Theme.palette.textSecondary }
+                        LogosText { Layout.fillWidth: true; text: modelData; textFormat: Text.PlainText }
+                    }
+                }
+            }
         }
 
+        SheetError { id: sheetError; objectName: "phraseError" }
         RowLayout {
             Layout.fillWidth: true
             LogosButton {
                 objectName: "phraseForgetButton"
                 text: "Forget phrase"
-                onClicked: logos.watch(sheet.backend.forgetPhrase(sheet.kept.id),
-                                       function (good) { if (good) sheet.close() })
+                onClicked: {
+                    sheetError.clear()
+                    logos.watch(sheetRoot.backend.forgetPhrase(sheetRoot.kept.id),
+                                function (good) { if (good) sheetRoot.close(); else sheetError.take(sheetRoot.backend, "The phrase is still kept.") },
+                                function () { sheetError.lost() })
+                }
             }
             Item { Layout.fillWidth: true }
-            LogosButton { objectName: "phraseCloseButton"; text: "Close"; onClicked: sheet.close() }
+            LogosButton { objectName: "phraseCloseButton"; text: "Close"; onClicked: sheetRoot.close() }
             LogosButton {
                 objectName: "phraseShowButton"
-                visible: sheet.words.length === 0
+                visible: sheetRoot.words.length === 0
                 enabled: pw.text.length > 0
                 text: "Show"
                 onClicked: {
-                    logos.watch(sheet.backend.showPhrase(sheet.kept.id, pw.text),
-                                function (w) { sheet.words = w || "" })
+                    sheetError.clear()
+                    logos.watch(sheetRoot.backend.showPhrase(sheetRoot.kept.id, pw.text),
+                                function (w) {
+                                    sheetRoot.words = w || ""
+                                    if (!w) sheetError.take(sheetRoot.backend, "The phrase was not shown.")
+                                }, function () { sheetError.lost() })
                     pw.text = ""
                 }
             }

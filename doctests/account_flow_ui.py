@@ -49,7 +49,7 @@ def select_coin(n):
     wait('!working && rows.length === 5', 'accountFlowSheet')
 
 def save():
-    click('flowReview')
+    click('flowReview'); click('flowToPassword')
     # Joining a wallet asks for its password once; there is nothing to repeat.
     assert value('visible', 'flowRepeatPassword') is False
     setp('flowPassword', 'text', 'flow-test-password')
@@ -60,7 +60,8 @@ if __name__ == '__main__':
     wait('ready && custodian')
     assert value('groups.length === 0 && accounts.length === 0 && phrases.length === 0'), 'Requires EMPTY isolated profile'
     assert send('findByProperty', {'property': 'objectName', 'value': 'deviceAccounts'})['count'] == 0
-    click('newAccountButton')
+    # An empty keystore offers Create in its empty state; the top row shows once there are wallets.
+    click('emptyCreate')
     wait('generated.length > 0 && !working', 'accountFlowSheet')
     assert value('step === 0 && selected.length === 0', 'accountFlowSheet')
     close()
@@ -68,7 +69,7 @@ if __name__ == '__main__':
     assert value('generated === ""', 'accountFlowSheet')
     print('PASS: cancelled creation leaves no keys or saved recovery source', flush=True)
 
-    click('importAccountsButton'); click('flowImportPhrase')
+    click('emptyImport'); click('flowImportPhrase')
     setp('flowWords', 'text', 'invalid recovery phrase')
     click('flowContinue'); wait('!working', 'accountFlowSheet')
     assert value('step === 0 && notice.length > 0', 'accountFlowSheet')
@@ -82,6 +83,7 @@ if __name__ == '__main__':
     assert value('groups.length === 0 && accounts.length === 0 && phrases.length === 0')
     click('flowReview')
     setp('flowName', 'text', 'Personal test')
+    click('flowToPassword')
     setp('flowPassword', 'text', 'flow-test-password')
     setp('flowRepeatPassword', 'text', 'different')
     assert value('enabled', 'flowSave') is False

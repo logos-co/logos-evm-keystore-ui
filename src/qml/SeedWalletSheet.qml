@@ -6,7 +6,7 @@ import Logos.Theme
 import "accountkit" as Accounts
 
 LogosDialog {
-    id: sheet
+    id: sheetRoot
     objectName: "seedWalletSheet"
     title: "Add a wallet from this seed"
     property var backend: null
@@ -20,7 +20,7 @@ LogosDialog {
         var used = {}
         if (bundle) bundle.nodes.forEach(function(n) {
             var g = n.group
-            if ((g.family || "evm") === sheet.family && (sheet.family === "evm" || g.chain === sheet.chain)) {
+            if ((g.family || "evm") === sheetRoot.family && (sheetRoot.family === "evm" || g.chain === sheetRoot.chain)) {
                 var segments = g.pathPrefix.split("/")
                 used[parseInt(segments[segments.length - 1])] = true
             }
@@ -29,8 +29,8 @@ LogosDialog {
         while (used[n]) ++n
         account.text = String(n)
     }
-    onOpened: { clearSecrets(); working = false; walletName.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
-    onClosed: { clearSecrets(); working = false }
+    onOpened: { clearSecrets(); working = false; sheetError.clear(); walletName.text = ""; kind.currentIndex = 0; derivable.checked = false; suggestAccount() }
+    onClosed: { clearSecrets(); working = false; sheetError.clear() }
     anchors.centerIn: parent
     width: Math.min(parent.width - 40, 620)
     contentItem: ColumnLayout {
@@ -38,17 +38,17 @@ LogosDialog {
         LogosText {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: sheet.keptId ? "Open the saved recovery phrase with its password. Its words stay inside the Keystore."
+            text: sheetRoot.keptId ? "Open the saved recovery phrase with its password. Its words stay inside the Keystore."
                                : "Enter the recovery phrase for this seed group. It will be checked against the existing wallet and will not be saved."
         }
         Accounts.PhraseGrid {
             id: words; objectName: "seedWords"
-            visible: !sheet.keptId
+            visible: !sheetRoot.keptId
             Layout.fillWidth: true
         }
         LogosTextField {
             id: phrasePw; objectName: "seedPhrasePassword"
-            visible: !!sheet.keptId
+            visible: !!sheetRoot.keptId
             Layout.fillWidth: true
             echoMode: TextInput.Password
             placeholderText: "Saved phrase's password"
@@ -65,13 +65,13 @@ LogosDialog {
                 id: kind; objectName: "seedWalletKind"
                 Layout.fillWidth: true
                 model: ["Ethereum", "Bitcoin — native segwit", "Bitcoin — taproot"]
-                onActivated: sheet.suggestAccount()
+                onActivated: sheetRoot.suggestAccount()
             }
             LogosCheckbox {
                 id: testNetwork; objectName: "seedTestNetwork"
-                visible: sheet.family !== "evm"
+                visible: sheetRoot.family !== "evm"
                 text: "Test networks"; checked: true
-                onToggled: sheet.suggestAccount()
+                onToggled: sheetRoot.suggestAccount()
             }
         }
         RowLayout {
@@ -95,37 +95,36 @@ LogosDialog {
         }
         LogosCheckbox {
             id: derivable; objectName: "seedDerivable"
-            visible: sheet.family === "evm"
+            visible: sheetRoot.family === "evm"
             text: "Allow adding Ethereum addresses with this wallet password"
         }
-        LogosText {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            color: Theme.palette.error
-            text: sheet.backend ? sheet.backend.lastError : ""
-        }
+        SheetError { id: sheetError; objectName: "seedAddError" }
         RowLayout {
-            LogosButton { text: "Cancel"; enabled: !sheet.working; onClicked: sheet.close() }
+            LogosButton { text: "Cancel"; enabled: !sheetRoot.working; onClicked: sheetRoot.close() }
             Item { Layout.fillWidth: true }
             LogosButton {
                 objectName: "seedAddConfirm"
-                text: sheet.working ? "Adding…" : "Add wallet"
-                enabled: !sheet.working && sheet.bundle && walletPw.text.length > 0
-                         && (sheet.keptId ? phrasePw.text.length > 0 : words.text.trim().length > 0)
+                text: sheetRoot.working ? "Adding…" : "Add wallet"
+                enabled: !sheetRoot.working && sheetRoot.bundle && walletPw.text.length > 0
+                         && (sheetRoot.keptId ? phrasePw.text.length > 0 : words.text.trim().length > 0)
                          && account.text.length > 0 && Number(account.text) < 2147483648
                 onClicked: {
-                    var p = { sourceGroup: sheet.bundle.nodes[0].group.id, family: sheet.family,
-                        passphrase: passphrase.text, password: walletPw.text, chain: sheet.chain,
+                    var p = { sourceGroup: sheetRoot.bundle.nodes[0].group.id, family: sheetRoot.family,
+                        passphrase: passphrase.text, password: walletPw.text, chain: sheetRoot.chain,
                         account: Number(account.text), bip44Account: Number(account.text),
                         storage: derivable.checked ? "extkey" : "plain", groupPassword: walletPw.text,
                         groupLabel: walletName.text.trim(), label: walletName.text.trim() }
-                    if (sheet.keptId) { p.keptPhrase = sheet.keptId; p.phrasePassword = phrasePw.text }
+                    if (sheetRoot.keptId) { p.keptPhrase = sheetRoot.keptId; p.phrasePassword = phrasePw.text }
                     else p.phrase = words.text
-                    sheet.working = true
-                    var reply = sheet.backend.addSeedWallet(JSON.stringify(p))
-                    p = {}; sheet.clearSecrets()
-                    logos.watch(reply, function(ok) { sheet.working = false; if (ok) sheet.close() })
+                    sheetRoot.working = true
+                    sheetError.clear()
+                    var reply = sheetRoot.backend.addSeedWallet(JSON.stringify(p))
+                    p = {}; sheetRoot.clearSecrets()
+                    logos.watch(reply, function(ok) {
+                        sheetRoot.working = false
+                        if (ok) sheetRoot.close()
+                        else sheetError.take(sheetRoot.backend, "The wallet was not added.")
+                    }, function () { sheetRoot.working = false; sheetError.lost() })
                 }
             }
         }
